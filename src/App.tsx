@@ -11,7 +11,7 @@ interface Player {
 interface Enemy {
   x: number; y: number; hp: number; maxHp: number; speed: number;
   damage: number; type: number; size: number; xpValue: number;
-  knockbackX: number; knockbackY: number;
+  knockbackX: number; knockbackY: number; isBoss?: boolean;
 }
 interface Projectile {
   x: number; y: number; vx: number; vy: number; damage: number;
@@ -22,6 +22,7 @@ interface DamageNumber { x: number; y: number; value: number; lifetime: number; 
 interface Upgrade { id: string; name: string; description: string; icon: string; apply: (p: Player) => void; }
 interface Particle { x: number; y: number; vx: number; vy: number; lifetime: number; maxLifetime: number; color: string; size: number; }
 interface MenuParticle { x: number; y: number; vx: number; vy: number; size: number; opacity: number; emoji: string; }
+interface Chest { x: number; y: number; type: number; collected: boolean; }
 
 const CHARACTERS = [
   { name: 'Сакура', emoji: '🌸', color: '#ff69b4', gradient: 'from-pink-500 to-rose-600', desc: 'Быстрая атака, средний урон', stats: '⚡ ATK SPD ↑' },
@@ -30,7 +31,7 @@ const CHARACTERS = [
   { name: 'Мико', emoji: '⚡', color: '#ffd700', gradient: 'from-yellow-400 to-amber-600', desc: 'Много снарядов, низкий урон', stats: '🌟 MULTI ↑' },
 ];
 
-const GAME_STATE = { MENU: 'menu', CHARACTER_SELECT: 'character_select', PLAYING: 'playing', LEVEL_UP: 'level_up', GAME_OVER: 'game_over', PAUSED: 'paused' };
+const GAME_STATE = { MENU: 'menu', CHARACTER_SELECT: 'character_select', PLAYING: 'playing', LEVEL_UP: 'level_up', GAME_OVER: 'game_over', PAUSED: 'paused', WAVE_INTRO: 'wave_intro' };
 
 const ALL_UPGRADES: Upgrade[] = [
   { id: 'damage_up', name: 'Сила+', description: '+20% к урону', icon: '⚔️', apply: (p: Player) => { p.damage *= 1.2; } },
@@ -49,6 +50,57 @@ function getRandomUpgrades(count: number): Upgrade[] {
   return [...ALL_UPGRADES].sort(() => Math.random() - 0.5).slice(0, count);
 }
 
+// Wave configurations
+interface WaveEnemy { type: number; count: number; isBoss?: boolean; }
+interface WaveConfig { enemies: WaveEnemy[]; duration: number; }
+
+const WAVES: WaveConfig[] = [
+  { enemies: [{ type: 0, count: 5 }], duration: 20 },
+  { enemies: [{ type: 0, count: 8 }, { type: 2, count: 3 }], duration: 20 },
+  { enemies: [{ type: 0, count: 10 }, { type: 2, count: 5 }], duration: 20 },
+  { enemies: [{ type: 1, count: 5 }, { type: 2, count: 8 }], duration: 20 },
+  { enemies: [{ type: 0, count: 12 }, { type: 1, count: 8 }, { type: 2, count: 5 }], duration: 20 },
+  { enemies: [{ type: 1, count: 10 }, { type: 2, count: 10 }], duration: 20 },
+  { enemies: [{ type: 0, count: 15 }, { type: 1, count: 10 }, { type: 2, count: 8 }], duration: 20 },
+  { enemies: [{ type: 1, count: 12 }, { type: 2, count: 12 }, { type: 3, count: 2 }], duration: 20 },
+  { enemies: [{ type: 0, count: 18 }, { type: 1, count: 12 }, { type: 2, count: 10 }, { type: 3, count: 3 }], duration: 20 },
+  { enemies: [{ type: 1, count: 15 }, { type: 2, count: 15 }, { type: 3, count: 5 }], duration: 20 },
+  { enemies: [{ type: 0, count: 20 }, { type: 1, count: 15 }, { type: 2, count: 12 }, { type: 3, count: 5 }], duration: 20 },
+  { enemies: [{ type: 1, count: 18 }, { type: 2, count: 18 }, { type: 3, count: 8 }], duration: 20 },
+  { enemies: [{ type: 0, count: 25 }, { type: 1, count: 18 }, { type: 2, count: 15 }, { type: 3, count: 8 }], duration: 20 },
+  { enemies: [{ type: 1, count: 20 }, { type: 2, count: 20 }, { type: 3, count: 10 }], duration: 20 },
+  { enemies: [{ type: 0, count: 30 }, { type: 1, count: 20 }, { type: 2, count: 18 }, { type: 3, count: 10 }], duration: 20 },
+  { enemies: [{ type: 1, count: 25 }, { type: 2, count: 22 }, { type: 3, count: 12 }], duration: 20 },
+  { enemies: [{ type: 0, count: 35 }, { type: 1, count: 25 }, { type: 2, count: 20 }, { type: 3, count: 12 }], duration: 20 },
+  { enemies: [{ type: 1, count: 28 }, { type: 2, count: 25 }, { type: 3, count: 15 }], duration: 20 },
+  { enemies: [{ type: 0, count: 40 }, { type: 1, count: 28 }, { type: 2, count: 22 }, { type: 3, count: 15 }], duration: 20 },
+  { enemies: [{ type: 1, count: 30 }, { type: 2, count: 28 }, { type: 3, count: 18 }], duration: 20 },
+  { enemies: [{ type: 0, count: 45 }, { type: 1, count: 30 }, { type: 2, count: 25 }, { type: 3, count: 18 }], duration: 20 },
+  { enemies: [{ type: 1, count: 32 }, { type: 2, count: 30 }, { type: 3, count: 20 }], duration: 20 },
+  { enemies: [{ type: 0, count: 50 }, { type: 1, count: 32 }, { type: 2, count: 28 }, { type: 3, count: 20 }], duration: 20 },
+  { enemies: [{ type: 1, count: 35 }, { type: 2, count: 32 }, { type: 3, count: 22 }], duration: 20 },
+  { enemies: [{ type: 0, count: 55 }, { type: 1, count: 35 }, { type: 2, count: 30 }, { type: 3, count: 22 }], duration: 20 },
+  { enemies: [{ type: 1, count: 38 }, { type: 2, count: 35 }, { type: 3, count: 25 }], duration: 20 },
+  { enemies: [{ type: 0, count: 60 }, { type: 1, count: 38 }, { type: 2, count: 32 }, { type: 3, count: 25 }], duration: 20 },
+  { enemies: [{ type: 1, count: 40 }, { type: 2, count: 38 }, { type: 3, count: 28 }], duration: 20 },
+  { enemies: [{ type: 0, count: 65 }, { type: 1, count: 40 }, { type: 2, count: 35 }, { type: 3, count: 28 }], duration: 20 },
+  { enemies: [{ type: 3, count: 1, isBoss: true }], duration: 60 },
+];
+
+const ENEMY_TYPES = [
+  { hp: 20, speed: 1.5, damage: 8, size: 18, xpValue: 3, color: '#8b0000', emoji: '👹' },
+  { hp: 40, speed: 1, damage: 12, size: 24, xpValue: 5, color: '#4a0080', emoji: '👻' },
+  { hp: 15, speed: 2.5, damage: 5, size: 14, xpValue: 2, color: '#006400', emoji: '🐛' },
+  { hp: 80, speed: 0.7, damage: 20, size: 32, xpValue: 10, color: '#8b4513', emoji: '👾' },
+];
+
+const CHEST_TYPES = [
+  { emoji: '📦', color: '#8b4513', reward: 'heal' },
+  { emoji: '🎁', color: '#ff69b4', reward: 'damage' },
+  { emoji: '💎', color: '#00ffff', reward: 'speed' },
+  { emoji: '👑', color: '#ffd700', reward: 'upgrade' },
+];
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef(GAME_STATE.MENU);
@@ -59,6 +111,8 @@ export default function App() {
   const [killCount, setKillCount] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [showPauseBtn, setShowPauseBtn] = useState(false);
+  const [currentWave, setCurrentWave] = useState(1);
+  const [waveIntro, setWaveIntro] = useState(false);
 
   const [menuParticles] = useState<MenuParticle[]>(() => {
     const emojis = ['🌸', '✨', '⭐', '💫', '🌟', '💖', '🎀'];
@@ -77,10 +131,14 @@ export default function App() {
   const xpOrbsRef = useRef<XpOrb[]>([]);
   const damageNumbersRef = useRef<DamageNumber[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const chestsRef = useRef<Chest[]>([]);
   const cameraRef = useRef({ x: 0, y: 0 });
   const gameTimeRef = useRef(0);
   const killCountRef = useRef(0);
-  const spawnTimerRef = useRef(0);
+  const currentWaveRef = useRef(1);
+  const waveTimerRef = useRef(0);
+  const waveEnemiesSpawnedRef = useRef(0);
+  const waveEnemiesTotalRef = useRef(0);
   const animFrameRef = useRef(0);
   const lastTimeRef = useRef(0);
   const joystickRef = useRef({ active: false, startX: 0, startY: 0, dx: 0, dy: 0 });
@@ -103,32 +161,66 @@ export default function App() {
     playerRef.current = p;
     enemiesRef.current = []; projectilesRef.current = [];
     xpOrbsRef.current = []; damageNumbersRef.current = [];
-    particlesRef.current = []; cameraRef.current = { x: 0, y: 0 };
-    gameTimeRef.current = 0; killCountRef.current = 0; spawnTimerRef.current = 0;
+    particlesRef.current = []; chestsRef.current = []; cameraRef.current = { x: 0, y: 0 };
+    gameTimeRef.current = 0; killCountRef.current = 0;
+    currentWaveRef.current = 1; waveTimerRef.current = 0;
+    waveEnemiesSpawnedRef.current = 0; waveEnemiesTotalRef.current = 0;
     setPlayerData({ hp: 100, maxHp: 100, level: 1, xp: 0, xpToNext: 10, damage: 10, speed: 3, attackSpeed: 1 });
-    setGameTime(0); setKillCount(0);
+    setGameTime(0); setKillCount(0); setCurrentWave(1);
     setUiState(GAME_STATE.PLAYING); gameStateRef.current = GAME_STATE.PLAYING;
+    startWave(1);
   };
 
-  const spawnEnemy = () => {
+  const startWave = (waveNum: number) => {
+    const wave = WAVES[waveNum - 1];
+    if (!wave) return;
+    
+    waveTimerRef.current = wave.duration;
+    waveEnemiesSpawnedRef.current = 0;
+    waveEnemiesTotalRef.current = wave.enemies.reduce((sum, e) => sum + e.count, 0);
+    
+    // Spawn chests
+    const chestCount = Math.floor(Math.random() * 2) + 1;
+    for (let i = 0; i < chestCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 300 + Math.random() * 400;
+      const p = playerRef.current;
+      if (p) {
+        chestsRef.current.push({
+          x: p.x + Math.cos(angle) * dist,
+          y: p.y + Math.sin(angle) * dist,
+          type: Math.floor(Math.random() * CHEST_TYPES.length),
+          collected: false,
+        });
+      }
+    }
+
+    // Show wave intro
+    setWaveIntro(true);
+    setTimeout(() => setWaveIntro(false), 2000);
+  };
+
+  const spawnEnemy = (type: number, isBoss: boolean = false) => {
     const p = playerRef.current; if (!p) return;
-    const time = gameTimeRef.current; const difficulty = 1 + time / 30;
     const angle = Math.random() * Math.PI * 2;
     const dist = 500 + Math.random() * 200;
-    const types = [
-      { hp: 20, speed: 1.5, damage: 8, size: 18, xpValue: 3 },
-      { hp: 40, speed: 1, damage: 12, size: 24, xpValue: 5 },
-      { hp: 15, speed: 2.5, damage: 5, size: 14, xpValue: 2 },
-      { hp: 80, speed: 0.7, damage: 20, size: 32, xpValue: 10 },
-    ];
-    const typeIdx = Math.random() < 0.7 ? Math.floor(Math.random() * 3) : 3;
-    const t = types[typeIdx];
-    enemiesRef.current.push({
-      x: p.x + Math.cos(angle) * dist, y: p.y + Math.sin(angle) * dist,
-      hp: t.hp * difficulty, maxHp: t.hp * difficulty,
-      speed: t.speed * (1 + time / 120), damage: t.damage * (1 + time / 60),
-      type: typeIdx, size: t.size, xpValue: t.xpValue, knockbackX: 0, knockbackY: 0,
-    });
+    const t = ENEMY_TYPES[type];
+    const waveMultiplier = 1 + (currentWaveRef.current - 1) * 0.15;
+    
+    const enemy: Enemy = {
+      x: p.x + Math.cos(angle) * dist,
+      y: p.y + Math.sin(angle) * dist,
+      hp: t.hp * waveMultiplier * (isBoss ? 10 : 1),
+      maxHp: t.hp * waveMultiplier * (isBoss ? 10 : 1),
+      speed: t.speed * (isBoss ? 0.5 : 1),
+      damage: t.damage * waveMultiplier * (isBoss ? 2 : 1),
+      type: type,
+      size: t.size * (isBoss ? 3 : 1),
+      xpValue: t.xpValue * (isBoss ? 50 : 1),
+      knockbackX: 0, knockbackY: 0,
+      isBoss: isBoss,
+    };
+    enemiesRef.current.push(enemy);
   };
 
   // Detect mobile
@@ -155,7 +247,7 @@ export default function App() {
     const handleKeyUp = (e: KeyboardEvent) => { keysRef.current.delete(e.key.toLowerCase()); };
     const handleTouchStart = (e: TouchEvent) => {
       if (gameStateRef.current !== GAME_STATE.PLAYING) return;
-      e.preventDefault(); // Prevent scroll/zoom during gameplay
+      e.preventDefault();
       const touch = e.touches[0];
       joystickRef.current = { active: true, startX: touch.clientX, startY: touch.clientY, dx: 0, dy: 0 };
     };
@@ -177,7 +269,6 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-    // Touch events on canvas only - UI overlay divs are on top (z-10) and handle their own clicks
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
@@ -213,6 +304,7 @@ export default function App() {
       uiUpdateTimerRef.current = 0;
       setGameTime(Math.floor(gameTimeRef.current));
       setKillCount(killCountRef.current);
+      setCurrentWave(currentWaveRef.current);
       setPlayerData({ hp: p.hp, maxHp: p.maxHp, level: p.level, xp: p.xp, xpToNext: p.xpToNext, damage: p.damage, speed: p.speed, attackSpeed: p.attackSpeed });
     }
 
@@ -264,8 +356,9 @@ export default function App() {
       e.knockbackX *= 0.9; e.knockbackY *= 0.9;
       if (e.hp <= 0) {
         killCountRef.current++;
+        waveEnemiesSpawnedRef.current--;
         xpOrbsRef.current.push({ x: e.x, y: e.y, value: e.xpValue, size: 6 + e.xpValue });
-        for (let i = 0; i < 8; i++) particlesRef.current.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, lifetime: 0.6, maxLifetime: 0.6, color: ['#ff0', '#f0f', '#0ff', '#f00'][e.type], size: 4 + Math.random() * 4 });
+        for (let i = 0; i < 8; i++) particlesRef.current.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, lifetime: 0.6, maxLifetime: 0.6, color: ENEMY_TYPES[e.type].color, size: 4 + Math.random() * 4 });
         return false;
       }
       const distToPlayer = Math.sqrt((p.x - e.x) ** 2 + (p.y - e.y) ** 2);
@@ -275,7 +368,31 @@ export default function App() {
         if (p.hp <= 0) {
           gameStateRef.current = GAME_STATE.GAME_OVER; setUiState(GAME_STATE.GAME_OVER);
           setHighScore(prev => Math.max(prev, Math.floor(gameTimeRef.current)));
+          setPlayerData({ hp: 0, maxHp: p.maxHp, level: p.level, xp: p.xp, xpToNext: p.xpToNext, damage: p.damage, speed: p.speed, attackSpeed: p.attackSpeed });
         }
+      }
+      return true;
+    });
+
+    // Chest collection
+    chestsRef.current = chestsRef.current.filter(chest => {
+      if (chest.collected) return false;
+      const dist = Math.sqrt((p.x - chest.x) ** 2 + (p.y - chest.y) ** 2);
+      if (dist < 40) {
+        chest.collected = true;
+        const chestType = CHEST_TYPES[chest.type];
+        // Apply reward
+        switch (chestType.reward) {
+          case 'heal': p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3); break;
+          case 'damage': p.damage *= 1.15; break;
+          case 'speed': p.speed *= 1.1; break;
+          case 'upgrade':
+            setUpgrades(getRandomUpgrades(1));
+            gameStateRef.current = GAME_STATE.LEVEL_UP; setUiState(GAME_STATE.LEVEL_UP);
+            break;
+        }
+        for (let i = 0; i < 12; i++) particlesRef.current.push({ x: chest.x, y: chest.y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, lifetime: 0.8, maxLifetime: 0.8, color: chestType.color, size: 5 + Math.random() * 5 });
+        return false;
       }
       return true;
     });
@@ -302,12 +419,32 @@ export default function App() {
     damageNumbersRef.current = damageNumbersRef.current.filter(d => { d.y -= 40 * dt; d.lifetime -= dt; return d.lifetime > 0; });
     particlesRef.current = particlesRef.current.filter(pt => { pt.x += pt.vx * 60 * dt; pt.y += pt.vy * 60 * dt; pt.lifetime -= dt; return pt.lifetime > 0; });
 
-    spawnTimerRef.current -= dt;
-    if (spawnTimerRef.current <= 0) {
-      spawnTimerRef.current = Math.max(0.2, 1.5 - gameTimeRef.current / 60);
-      for (let i = 0; i < 1 + Math.floor(gameTimeRef.current / 20); i++) spawnEnemy();
+    // Wave system
+    waveTimerRef.current -= dt;
+    if (waveTimerRef.current <= 0 && waveEnemiesSpawnedRef.current <= 0) {
+      // Wave complete
+      if (currentWaveRef.current < 30) {
+        currentWaveRef.current++;
+        setCurrentWave(currentWaveRef.current);
+        startWave(currentWaveRef.current);
+      } else {
+        // Victory!
+        gameStateRef.current = GAME_STATE.GAME_OVER; setUiState(GAME_STATE.GAME_OVER);
+        setHighScore(prev => Math.max(prev, Math.floor(gameTimeRef.current)));
+      }
+    } else if (waveTimerRef.current > 0) {
+      // Spawn enemies during wave
+      const wave = WAVES[currentWaveRef.current - 1];
+      if (wave && waveEnemiesSpawnedRef.current < waveEnemiesTotalRef.current) {
+        const spawnChance = 0.05 * (1 + currentWaveRef.current * 0.1);
+        if (Math.random() < spawnChance) {
+          const enemyConfig = wave.enemies[Math.floor(Math.random() * wave.enemies.length)];
+          const isBoss = 'isBoss' in enemyConfig ? enemyConfig.isBoss : false;
+          spawnEnemy(enemyConfig.type, isBoss);
+          waveEnemiesSpawnedRef.current++;
+        }
+      }
     }
-    if (enemiesRef.current.length > 200) enemiesRef.current = enemiesRef.current.slice(-150);
   };
 
   const renderGame = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
@@ -316,7 +453,7 @@ export default function App() {
     const p = playerRef.current; if (!p) return;
     const cam = cameraRef.current;
 
-    // Grid with glow
+    // Grid
     ctx.strokeStyle = '#1a1a3e';
     ctx.lineWidth = 1;
     const gridSize = 80;
@@ -328,6 +465,18 @@ export default function App() {
     for (let y = startY; y < cam.y + canvas.height + gridSize; y += gridSize) {
       ctx.beginPath(); ctx.moveTo(0, y - cam.y); ctx.lineTo(canvas.width, y - cam.y); ctx.stroke();
     }
+
+    // Chests
+    chestsRef.current.forEach(chest => {
+      const sx = chest.x - cam.x, sy = chest.y - cam.y;
+      if (sx < -50 || sx > canvas.width + 50 || sy < -50 || sy > canvas.height + 50) return;
+      const chestType = CHEST_TYPES[chest.type];
+      ctx.save();
+      ctx.shadowColor = chestType.color; ctx.shadowBlur = 15;
+      ctx.font = '32px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(chestType.emoji, sx, sy);
+      ctx.restore();
+    });
 
     // XP orbs
     xpOrbsRef.current.forEach(orb => {
@@ -349,23 +498,22 @@ export default function App() {
     ctx.globalAlpha = 1;
 
     // Enemies
-    const colors = ['#8b0000', '#4a0080', '#006400', '#8b4513'];
-    const emojis = ['👹', '👻', '🐛', '👾'];
     enemiesRef.current.forEach(e => {
       const sx = e.x - cam.x, sy = e.y - cam.y;
       if (sx < -50 || sx > canvas.width + 50 || sy < -50 || sy > canvas.height + 50) return;
+      const t = ENEMY_TYPES[e.type];
       ctx.save();
-      ctx.shadowColor = colors[e.type]; ctx.shadowBlur = 8;
+      ctx.shadowColor = t.color; ctx.shadowBlur = e.isBoss ? 20 : 8;
       ctx.beginPath(); ctx.arc(sx, sy, e.size, 0, Math.PI * 2);
-      ctx.fillStyle = colors[e.type]; ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = t.color; ctx.fill();
+      ctx.strokeStyle = e.isBoss ? '#ffd700' : 'rgba(255,255,255,0.3)'; ctx.lineWidth = e.isBoss ? 4 : 2; ctx.stroke();
       ctx.restore();
       ctx.font = `${e.size}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(emojis[e.type], sx, sy);
+      ctx.fillText(t.emoji, sx, sy);
       if (e.hp < e.maxHp) {
         const barW = e.size * 2;
         ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - barW / 2, sy - e.size - 10, barW, 4);
-        ctx.fillStyle = '#ff4444'; ctx.fillRect(sx - barW / 2, sy - e.size - 10, barW * (e.hp / e.maxHp), 4);
+        ctx.fillStyle = e.isBoss ? '#ffd700' : '#ff4444'; ctx.fillRect(sx - barW / 2, sy - e.size - 10, barW * (e.hp / e.maxHp), 4);
       }
     });
 
@@ -443,16 +591,18 @@ export default function App() {
     ctx.font = 'bold 10px "Segoe UI", sans-serif'; ctx.fillStyle = '#fff';
     ctx.fillText(`Lv.${p.level}  ${p.xp}/${p.xpToNext}`, 16 + xpBarW / 2, 54);
 
-    // Timer
+    // Wave & Timer
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    roundRect(ctx, canvas.width - 130, 12, 116, 50, 10);
+    roundRect(ctx, canvas.width - 150, 12, 136, 70, 10);
     ctx.fill();
+    ctx.font = 'bold 14px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd700';
+    ctx.fillText(`Волна ${currentWaveRef.current}/30`, canvas.width - 82, 32);
     const mins = Math.floor(gameTimeRef.current / 60);
     const secs = Math.floor(gameTimeRef.current % 60);
-    ctx.font = 'bold 22px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
-    ctx.fillText(`${mins}:${secs.toString().padStart(2, '0')}`, canvas.width - 72, 36);
-    ctx.font = '13px "Segoe UI", sans-serif'; ctx.fillStyle = '#aaa';
-    ctx.fillText(`💀 ${killCountRef.current}`, canvas.width - 72, 54);
+    ctx.font = 'bold 20px "Segoe UI", sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText(`${mins}:${secs.toString().padStart(2, '0')}`, canvas.width - 82, 54);
+    ctx.font = '12px "Segoe UI", sans-serif'; ctx.fillStyle = '#aaa';
+    ctx.fillText(`💀 ${killCountRef.current}`, canvas.width - 82, 72);
 
     // Stats
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -492,13 +642,24 @@ export default function App() {
     <div className="w-full h-screen overflow-hidden relative bg-[#0a0a14] select-none">
       <canvas ref={canvasRef} className="absolute inset-0" />
 
-      {/* Pause button for mobile - shown during gameplay */}
+      {/* Wave intro */}
+      {waveIntro && (
+        <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+          <div className="text-center animate-pulse">
+            <div className="text-6xl font-black text-yellow-400 drop-shadow-lg">
+              ВОЛНА {currentWave}
+            </div>
+            {currentWave === 30 && <div className="text-3xl font-bold text-red-500 mt-2">👑 БОСС 👑</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Pause button for mobile */}
       {uiState === GAME_STATE.PLAYING && showPauseBtn && (
         <button
           onClick={(e) => {
             e.stopPropagation();
-            gameStateRef.current = GAME_STATE.PAUSED;
-            setUiState(GAME_STATE.PAUSED);
+            gameStateRef.current = GAME_STATE.PAUSED; setUiState(GAME_STATE.PAUSED);
           }}
           className="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 border border-white/20 text-white/70 text-lg backdrop-blur-sm active:scale-90 transition-transform"
         >
@@ -506,137 +667,88 @@ export default function App() {
         </button>
       )}
 
-      {/* ===== MENU ===== */}
+      {/* MENU */}
       {uiState === GAME_STATE.MENU && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 overflow-hidden">
-          {/* Animated background */}
           <div className="absolute inset-0 bg-gradient-to-br from-[#1a0533] via-[#0d0d2b] to-[#1a0033]" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(120,0,255,0.15),transparent_70%)]" />
-
-          {/* Floating particles */}
           {menuParticles.map((p, i) => (
-            <div
-              key={i}
-              className="absolute pointer-events-none animate-float"
-              style={{
-                left: `${p.x}%`, top: `${p.y}%`, fontSize: `${p.size}px`,
-                opacity: p.opacity, animation: `floatUp ${8 + i * 0.5}s linear infinite`,
-                animationDelay: `${i * 0.3}s`,
-              }}
-            >
+            <div key={i} className="absolute pointer-events-none" style={{ left: `${p.x}%`, top: `${p.y}%`, fontSize: `${p.size}px`, opacity: p.opacity, animation: `floatUp ${8 + i * 0.5}s linear infinite`, animationDelay: `${i * 0.3}s` }}>
               {p.emoji}
             </div>
           ))}
-
           <div className="relative z-10 flex flex-col items-center text-center px-4 w-full max-w-2xl">
-            {/* Title */}
             <div className="mb-2">
               <span className="text-6xl md:text-8xl font-black bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent drop-shadow-lg tracking-tight">
                 アニメ
               </span>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black text-white mb-1 tracking-wide">
-              Survivors
-            </h1>
+            <h1 className="text-4xl md:text-6xl font-black text-white mb-1 tracking-wide">Survivors</h1>
             <div className="flex items-center justify-center gap-2 mb-8">
               <div className="h-px w-16 bg-gradient-to-r from-transparent to-pink-500/50" />
-              <p className="text-lg text-purple-200/80 font-medium">✨ Выживи как можно дольше ✨</p>
+              <p className="text-lg text-purple-200/80 font-medium">✨ 30 волн выживания ✨</p>
               <div className="h-px w-16 bg-gradient-to-l from-transparent to-pink-500/50" />
             </div>
-
             {highScore > 0 && (
               <div className="mb-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30">
                 <span className="text-yellow-400">🏆</span>
                 <span className="text-yellow-200 font-semibold">Рекорд: {Math.floor(highScore / 60)}:{(highScore % 60).toString().padStart(2, '0')}</span>
               </div>
             )}
-
-            <button
-              onClick={() => { setUiState(GAME_STATE.CHARACTER_SELECT); gameStateRef.current = GAME_STATE.CHARACTER_SELECT; }}
-              className="group relative px-10 py-4 rounded-2xl font-bold text-xl text-white overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95"
-            >
+            <button onClick={() => { setUiState(GAME_STATE.CHARACTER_SELECT); gameStateRef.current = GAME_STATE.CHARACTER_SELECT; }} className="group relative px-10 py-4 rounded-2xl font-bold text-xl text-white overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95">
               <div className="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 transition-all duration-300 group-hover:from-pink-400 group-hover:via-purple-400 group-hover:to-indigo-400" />
               <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-pink-400 via-purple-400 to-indigo-400 blur-xl" />
-              <span className="relative z-10 flex items-center gap-3">
-                <span className="text-2xl">🎮</span> Начать игру
-              </span>
+              <span className="relative z-10 flex items-center gap-3"><span className="text-2xl">🎮</span> Начать игру</span>
             </button>
-
             <div className="mt-10 space-y-2 flex flex-col items-center">
               <div className="flex items-center justify-center gap-6 text-sm text-purple-300/60">
                 <span className="flex items-center gap-1.5"><kbd className="px-2 py-0.5 rounded bg-white/10 text-white/70 text-xs font-mono">WASD</kbd> Движение</span>
                 <span className="flex items-center gap-1.5"><kbd className="px-2 py-0.5 rounded bg-white/10 text-white/70 text-xs font-mono">ESC</kbd> Пауза</span>
               </div>
-              <p className="text-xs text-purple-400/40">Атака автоматическая • Собирай опыт • Прокачивайся</p>
+              <p className="text-xs text-purple-400/40">Собирай сундуки • Прокачивайся • Победи босса!</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== CHARACTER SELECT ===== */}
+      {/* CHARACTER SELECT */}
       {uiState === GAME_STATE.CHARACTER_SELECT && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-[#0d0d2b] via-[#1a0a3a] to-[#0d0d2b]" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(120,0,255,0.1),transparent_60%)]" />
-
           <div className="relative z-10 flex flex-col items-center text-center px-4 w-full max-w-3xl">
             <h2 className="text-3xl md:text-5xl font-black text-white mb-2">Выбери героиню</h2>
             <p className="text-purple-300/60 mb-8">Каждая героиня имеет уникальный стиль боя</p>
-
             <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">
               {CHARACTERS.map((char, i) => (
-                <button
-                  key={i}
-                  onClick={() => initGame(i)}
-                  className="group relative p-5 md:p-7 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-white/30 transition-all duration-300 transform hover:scale-[1.03] active:scale-[0.98] overflow-hidden"
-                >
-                  {/* Hover glow */}
+                <button key={i} onClick={() => initGame(i)} className="group relative p-5 md:p-7 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-white/30 transition-all duration-300 transform hover:scale-[1.03] active:scale-[0.98] overflow-hidden">
                   <div className={`absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500 bg-gradient-to-br ${char.gradient} blur-xl`} />
-
                   <div className="relative z-10">
-                    <div className="text-5xl md:text-6xl mb-3 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-1">
-                      {char.emoji}
-                    </div>
+                    <div className="text-5xl md:text-6xl mb-3 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-1">{char.emoji}</div>
                     <div className="text-lg md:text-xl font-bold text-white mb-1">{char.name}</div>
                     <div className="text-xs md:text-sm text-gray-400 mb-2">{char.desc}</div>
-                    <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r ${char.gradient} text-white`}>
-                      {char.stats}
-                    </div>
+                    <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r ${char.gradient} text-white`}>{char.stats}</div>
                   </div>
                 </button>
               ))}
             </div>
-
-            <button
-              onClick={() => { setUiState(GAME_STATE.MENU); gameStateRef.current = GAME_STATE.MENU; }}
-              className="mt-8 px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-all duration-200"
-            >
-              ← Назад
-            </button>
+            <button onClick={() => { setUiState(GAME_STATE.MENU); gameStateRef.current = GAME_STATE.MENU; }} className="mt-8 px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-all duration-200">← Назад</button>
           </div>
         </div>
       )}
 
-      {/* ===== LEVEL UP ===== */}
+      {/* LEVEL UP */}
       {uiState === GAME_STATE.LEVEL_UP && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 overflow-hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,200,0,0.08),transparent_60%)]" />
-
           <div className="relative z-10 flex flex-col items-center text-center px-4 w-full max-w-4xl">
             <div className="mb-1 text-6xl animate-bounce">⬆️</div>
-            <h2 className="text-3xl md:text-5xl font-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 bg-clip-text text-transparent mb-1">
-              Уровень {playerData.level}!
-            </h2>
+            <h2 className="text-3xl md:text-5xl font-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 bg-clip-text text-transparent mb-1">Уровень {playerData.level}!</h2>
             <p className="text-white/60 mb-8 text-lg">Выбери улучшение</p>
-
             <div className="flex gap-3 md:gap-5 flex-wrap justify-center items-stretch w-full">
               {upgrades.map((up, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleUpgrade(up)}
-                  className="group relative p-5 md:p-6 w-44 md:w-52 rounded-2xl border border-yellow-500/30 bg-gradient-to-b from-purple-900/80 to-indigo-950/80 backdrop-blur-md hover:border-yellow-400/60 transition-all duration-300 transform hover:scale-105 active:scale-95 overflow-hidden flex flex-col items-center"
-                >
+                <button key={i} onClick={() => handleUpgrade(up)} className="group relative p-5 md:p-6 w-44 md:w-52 rounded-2xl border border-yellow-500/30 bg-gradient-to-b from-purple-900/80 to-indigo-950/80 backdrop-blur-md hover:border-yellow-400/60 transition-all duration-300 transform hover:scale-105 active:scale-95 overflow-hidden flex flex-col items-center">
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-300 bg-gradient-to-b from-yellow-400/20 to-transparent" />
                   <div className="relative z-10 flex flex-col items-center">
                     <div className="text-4xl md:text-5xl mb-3 transition-transform duration-300 group-hover:scale-125">{up.icon}</div>
@@ -650,7 +762,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ===== PAUSED ===== */}
+      {/* PAUSED */}
       {uiState === GAME_STATE.PAUSED && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
@@ -658,36 +770,32 @@ export default function App() {
             <div className="text-6xl mb-4">⏸️</div>
             <h2 className="text-4xl md:text-5xl font-black text-white mb-8">Пауза</h2>
             <div className="flex flex-col gap-3">
-              <button
-                onClick={() => { gameStateRef.current = GAME_STATE.PLAYING; setUiState(GAME_STATE.PLAYING); lastTimeRef.current = performance.now(); }}
-                className="px-10 py-3.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg shadow-green-500/20"
-              >
-                ▶️ Продолжить
-              </button>
-              <button
-                onClick={() => { gameStateRef.current = GAME_STATE.MENU; setUiState(GAME_STATE.MENU); }}
-                className="px-10 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95"
-              >
-                🏠 В меню
-              </button>
+              <button onClick={() => { gameStateRef.current = GAME_STATE.PLAYING; setUiState(GAME_STATE.PLAYING); lastTimeRef.current = performance.now(); }} className="px-10 py-3.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg shadow-green-500/20">▶️ Продолжить</button>
+              <button onClick={() => { gameStateRef.current = GAME_STATE.MENU; setUiState(GAME_STATE.MENU); }} className="px-10 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95">🏠 В меню</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== GAME OVER ===== */}
+      {/* GAME OVER */}
       {uiState === GAME_STATE.GAME_OVER && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 overflow-hidden">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-md" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,0,0,0.05),transparent_60%)]" />
-
           <div className="relative z-10 text-center px-4">
-            <div className="text-6xl mb-3">💀</div>
+            <div className="text-6xl mb-3">{currentWave === 30 ? '🏆' : '💀'}</div>
             <h2 className="text-4xl md:text-6xl font-black bg-gradient-to-r from-red-400 via-rose-400 to-red-500 bg-clip-text text-transparent mb-8">
-              Game Over
+              {currentWave === 30 ? 'ПОБЕДА!' : 'Game Over'}
             </h2>
-
             <div className="inline-flex flex-col gap-3 px-8 py-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md mb-8">
+              <div className="flex items-center gap-4">
+                <span className="text-2xl">🌊</span>
+                <div className="text-left">
+                  <div className="text-xs text-gray-400">Волна</div>
+                  <div className="text-xl font-bold text-white">{currentWave}/30</div>
+                </div>
+              </div>
+              <div className="h-px bg-white/10" />
               <div className="flex items-center gap-4">
                 <span className="text-2xl">⏱️</span>
                 <div className="text-left">
@@ -712,20 +820,9 @@ export default function App() {
                 </div>
               </div>
             </div>
-
             <div className="flex flex-col gap-3">
-              <button
-                onClick={() => { gameStateRef.current = GAME_STATE.CHARACTER_SELECT; setUiState(GAME_STATE.CHARACTER_SELECT); }}
-                className="px-10 py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg shadow-pink-500/20"
-              >
-                🔄 Играть снова
-              </button>
-              <button
-                onClick={() => { gameStateRef.current = GAME_STATE.MENU; setUiState(GAME_STATE.MENU); }}
-                className="px-10 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95"
-              >
-                🏠 В меню
-              </button>
+              <button onClick={() => { gameStateRef.current = GAME_STATE.CHARACTER_SELECT; setUiState(GAME_STATE.CHARACTER_SELECT); }} className="px-10 py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg shadow-pink-500/20">🔄 Играть снова</button>
+              <button onClick={() => { gameStateRef.current = GAME_STATE.MENU; setUiState(GAME_STATE.MENU); }} className="px-10 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 text-lg font-bold transition-all duration-200 hover:scale-105 active:scale-95">🏠 В меню</button>
             </div>
           </div>
         </div>
