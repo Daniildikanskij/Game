@@ -58,6 +58,8 @@ export default function App() {
   const [gameTime, setGameTime] = useState(0);
   const [killCount, setKillCount] = useState(0);
   const [highScore, setHighScore] = useState(0);
+  const [showPauseBtn, setShowPauseBtn] = useState(false);
+
   const [menuParticles] = useState<MenuParticle[]>(() => {
     const emojis = ['🌸', '✨', '⭐', '💫', '🌟', '💖', '🎀'];
     return Array.from({ length: 30 }, () => ({
@@ -129,6 +131,11 @@ export default function App() {
     });
   };
 
+  // Detect mobile
+  useEffect(() => {
+    setShowPauseBtn('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
   // ==================== GAME LOOP ====================
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -147,24 +154,33 @@ export default function App() {
     };
     const handleKeyUp = (e: KeyboardEvent) => { keysRef.current.delete(e.key.toLowerCase()); };
     const handleTouchStart = (e: TouchEvent) => {
+      if (gameStateRef.current !== GAME_STATE.PLAYING) return;
+      e.preventDefault(); // Prevent scroll/zoom during gameplay
       const touch = e.touches[0];
       joystickRef.current = { active: true, startX: touch.clientX, startY: touch.clientY, dx: 0, dy: 0 };
     };
     const handleTouchMove = (e: TouchEvent) => {
-      if (!joystickRef.current.active) return; e.preventDefault();
+      if (gameStateRef.current !== GAME_STATE.PLAYING) return;
+      if (!joystickRef.current.active) return;
+      e.preventDefault();
       const touch = e.touches[0];
       joystickRef.current.dx = (touch.clientX - joystickRef.current.startX) / 50;
       joystickRef.current.dy = (touch.clientY - joystickRef.current.startY) / 50;
       const len = Math.sqrt(joystickRef.current.dx ** 2 + joystickRef.current.dy ** 2);
       if (len > 1) { joystickRef.current.dx /= len; joystickRef.current.dy /= len; }
     };
-    const handleTouchEnd = () => { joystickRef.current.active = false; joystickRef.current.dx = 0; joystickRef.current.dy = 0; };
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (gameStateRef.current !== GAME_STATE.PLAYING) return;
+      e.preventDefault();
+      joystickRef.current.active = false; joystickRef.current.dx = 0; joystickRef.current.dy = 0;
+    };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    // Touch events on canvas only - UI overlay divs are on top (z-10) and handle their own clicks
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvas.addEventListener('touchend', handleTouchEnd);
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
 
     lastTimeRef.current = performance.now();
 
@@ -467,12 +483,28 @@ export default function App() {
 
   const handleUpgrade = (upgrade: Upgrade) => {
     if (playerRef.current) upgrade.apply(playerRef.current);
+    joystickRef.current = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
     gameStateRef.current = GAME_STATE.PLAYING; setUiState(GAME_STATE.PLAYING); setUpgrades([]);
+    lastTimeRef.current = performance.now();
   };
 
   return (
     <div className="w-full h-screen overflow-hidden relative bg-[#0a0a14] select-none">
       <canvas ref={canvasRef} className="absolute inset-0" />
+
+      {/* Pause button for mobile - shown during gameplay */}
+      {uiState === GAME_STATE.PLAYING && showPauseBtn && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            gameStateRef.current = GAME_STATE.PAUSED;
+            setUiState(GAME_STATE.PAUSED);
+          }}
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 border border-white/20 text-white/70 text-lg backdrop-blur-sm active:scale-90 transition-transform"
+        >
+          ⏸
+        </button>
+      )}
 
       {/* ===== MENU ===== */}
       {uiState === GAME_STATE.MENU && (
