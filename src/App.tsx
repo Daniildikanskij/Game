@@ -528,7 +528,7 @@ export default function App() {
             </div>
           ))}
 
-          <div className="relative z-10 text-center px-4">
+          <div className="relative z-10 flex flex-col items-center text-center px-4 w-full max-w-2xl">
             {/* Title */}
             <div className="mb-2">
               <span className="text-6xl md:text-8xl font-black bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent drop-shadow-lg tracking-tight">
@@ -562,7 +562,7 @@ export default function App() {
               </span>
             </button>
 
-            <div className="mt-10 space-y-2">
+            <div className="mt-10 space-y-2 flex flex-col items-center">
               <div className="flex items-center justify-center gap-6 text-sm text-purple-300/60">
                 <span className="flex items-center gap-1.5"><kbd className="px-2 py-0.5 rounded bg-white/10 text-white/70 text-xs font-mono">WASD</kbd> Движение</span>
                 <span className="flex items-center gap-1.5"><kbd className="px-2 py-0.5 rounded bg-white/10 text-white/70 text-xs font-mono">ESC</kbd> Пауза</span>
@@ -579,11 +579,11 @@ export default function App() {
           <div className="absolute inset-0 bg-gradient-to-br from-[#0d0d2b] via-[#1a0a3a] to-[#0d0d2b]" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(120,0,255,0.1),transparent_60%)]" />
 
-          <div className="relative z-10 text-center px-4 w-full max-w-3xl">
+          <div className="relative z-10 flex flex-col items-center text-center px-4 w-full max-w-3xl">
             <h2 className="text-3xl md:text-5xl font-black text-white mb-2">Выбери героиню</h2>
             <p className="text-purple-300/60 mb-8">Каждая героиня имеет уникальный стиль боя</p>
 
-            <div className="grid grid-cols-2 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">
               {CHARACTERS.map((char, i) => (
                 <button
                   key={i}
@@ -623,22 +623,22 @@ export default function App() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,200,0,0.08),transparent_60%)]" />
 
-          <div className="relative z-10 text-center px-4">
+          <div className="relative z-10 flex flex-col items-center text-center px-4 w-full max-w-4xl">
             <div className="mb-1 text-6xl animate-bounce">⬆️</div>
             <h2 className="text-3xl md:text-5xl font-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 bg-clip-text text-transparent mb-1">
               Уровень {playerData.level}!
             </h2>
             <p className="text-white/60 mb-8 text-lg">Выбери улучшение</p>
 
-            <div className="flex gap-3 md:gap-5 flex-wrap justify-center max-w-2xl mx-auto">
+            <div className="flex gap-3 md:gap-5 flex-wrap justify-center items-stretch w-full">
               {upgrades.map((up, i) => (
                 <button
                   key={i}
                   onClick={() => handleUpgrade(up)}
-                  className="group relative p-5 md:p-6 w-44 md:w-52 rounded-2xl border border-yellow-500/30 bg-gradient-to-b from-purple-900/80 to-indigo-950/80 backdrop-blur-md hover:border-yellow-400/60 transition-all duration-300 transform hover:scale-105 active:scale-95 overflow-hidden"
+                  className="group relative p-5 md:p-6 w-44 md:w-52 rounded-2xl border border-yellow-500/30 bg-gradient-to-b from-purple-900/80 to-indigo-950/80 backdrop-blur-md hover:border-yellow-400/60 transition-all duration-300 transform hover:scale-105 active:scale-95 overflow-hidden flex flex-col items-center"
                 >
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-300 bg-gradient-to-b from-yellow-400/20 to-transparent" />
-                  <div className="relative z-10">
+                  <div className="relative z-10 flex flex-col items-center">
                     <div className="text-4xl md:text-5xl mb-3 transition-transform duration-300 group-hover:scale-125">{up.icon}</div>
                     <div className="text-base md:text-lg font-bold text-white mb-1">{up.name}</div>
                     <div className="text-xs md:text-sm text-purple-200/70">{up.description}</div>
