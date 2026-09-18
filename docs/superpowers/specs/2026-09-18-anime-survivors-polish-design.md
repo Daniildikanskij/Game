@@ -16,7 +16,7 @@ Make the current Anime Survivors build comfortable to play in both English and R
 
 ## Architecture
 
-The canvas simulation remains in `src/App.tsx`, but deterministic rules move to `src/gameLogic.ts`. `App.tsx` owns mutable refs and React state, calls the pure helpers from the loop, and renders the overlays. `src/index.css` provides shared panel, button, HUD, responsive, and accessibility styles. Tests cover the pure helpers; the browser smoke pass covers the assembled game.
+The canvas simulation remains in `src/App.tsx`, but deterministic rules move to `src/gameLogic.ts`. `App.tsx` owns mutable refs and React state, calls the pure helpers from the loop, and renders the overlays. `src/index.css` provides shared panel, button, HUD, responsive, and accessibility styles. Node's built-in test runner covers the pure helpers; the browser smoke pass covers the assembled game.
 
 ## UX direction
 

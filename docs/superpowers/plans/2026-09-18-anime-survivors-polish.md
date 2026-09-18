@@ -4,16 +4,16 @@
 
 **Goal:** Make Anime Survivors layout-independent, progression-correct, frame-rate-stable, persistent, and visually coherent.
 
-**Architecture:** Keep the canvas loop in `src/App.tsx`, extract deterministic keyboard, XP, spawn-rate, and wave-queue rules into `src/gameLogic.ts`, and use `src/index.css` for the shared responsive visual system. Vitest tests exercise the extracted rules; browser smoke testing exercises the assembled game.
+**Architecture:** Keep the canvas loop in `src/App.tsx`, extract deterministic keyboard, XP, spawn-rate, and wave-queue rules into `src/gameLogic.ts`, and use `src/index.css` for the shared responsive visual system. Node's built-in test runner exercises the extracted rules; browser smoke testing exercises the assembled game.
 
-**Tech Stack:** React 18, TypeScript, Vite, Vitest, canvas 2D, existing Tailwind/Vite CSS pipeline.
+**Tech Stack:** React 18, TypeScript, Vite, Node 24 built-in test runner, canvas 2D, existing Tailwind/Vite CSS pipeline.
 
 **Spec:** `docs/superpowers/specs/2026-09-18-anime-survivors-polish-design.md`
 
 ## Global Constraints
 
 - Keep the anime/neon game identity and Russian UI copy.
-- Add no runtime dependencies; Vitest is test-only.
+- Add no new dependencies; use the existing Node 24 test runner with TypeScript type stripping.
 - Do not add a backend or change the save format beyond one localStorage best-time number.
 - Preserve the existing 30-wave game loop and character roster.
 - Run typecheck, tests, build, and a visible browser smoke test before pushing.
@@ -26,7 +26,6 @@
 - Create: `src/gameLogic.ts`
 - Create: `src/gameLogic.test.ts`
 - Modify: `package.json`
-- Modify: `package-lock.json`
 
 **Interfaces:**
 - `getMovementKey(event: { code: string; key: string }): MovementKey | null`
@@ -34,10 +33,10 @@
 - `spawnProbability(ratePerSecond: number, dt: number): number`
 - `buildWaveSpawnQueue(entries: WaveEnemy[], random?: () => number): WaveEnemy[]`
 
-- [ ] **Step 1: Add Vitest scripts and dependency.** Add `"test": "vitest run"` and install `vitest` as a dev dependency.
+- [ ] **Step 1:** Add `"test": "node --test --experimental-strip-types src/gameLogic.test.ts"` to `package.json`.
 - [ ] **Step 2: Write failing input tests.** Assert `KeyW`, `KeyA`, `KeyS`, `KeyD`, Cyrillic `ц/ф/ы/в`, and arrow keys map to canonical directions; unknown keys return `null`.
 - [ ] **Step 3: Write failing progression and wave tests.** Assert a 500 XP pickup can advance through every threshold, progress remains below the next threshold, spawn probability is 0 for `dt=0` and frame-rate independent, and a queue preserves each declared enemy count.
-- [ ] **Step 4: Run `npm test` and confirm the new tests fail because the helpers do not exist yet.**
+- [ ] **Step 4:** Run `npm test` and confirm the new tests fail because the helpers do not exist yet.
 
 ### Task 2: Implement and integrate deterministic rules
 
