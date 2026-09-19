@@ -6,6 +6,28 @@ export interface CanvasMetrics {
   bufferHeight: number;
 }
 
+export interface CanvasViewport {
+  width: number;
+  height: number;
+}
+
+export function getCanvasViewport(
+  containerWidth: number,
+  containerHeight: number,
+  fallbackWidth: number,
+  fallbackHeight: number,
+): CanvasViewport {
+  const resolveDimension = (containerDimension: number, fallbackDimension: number) => {
+    if (Number.isFinite(containerDimension) && containerDimension > 0) return containerDimension;
+    return Number.isFinite(fallbackDimension) && fallbackDimension > 0 ? fallbackDimension : 0;
+  };
+
+  return {
+    width: resolveDimension(containerWidth, fallbackWidth),
+    height: resolveDimension(containerHeight, fallbackHeight),
+  };
+}
+
 export function getCanvasMetrics(width: number, height: number, devicePixelRatio: number, maxDpr = 2): CanvasMetrics {
   const logicalWidth = Math.max(0, width);
   const logicalHeight = Math.max(0, height);

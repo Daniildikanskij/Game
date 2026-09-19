@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getCanvasMetrics } from './canvas.ts';
+import { getCanvasMetrics, getCanvasViewport } from './canvas.ts';
+
+test('uses the layout container dimensions for the canvas viewport', () => {
+  assert.deepEqual(getCanvasViewport(1023.33, 898, 300, 150), {
+    width: 1023.33,
+    height: 898,
+  });
+  assert.deepEqual(getCanvasViewport(0, 0, 1023, 898), {
+    width: 1023,
+    height: 898,
+  });
+});
 
 test('keeps logical dimensions and scales the backing buffer', () => {
   assert.deepEqual(getCanvasMetrics(800, 600, 1), {

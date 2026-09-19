@@ -6,7 +6,7 @@ import {
   MAX_WAVES,
 } from './game/config';
 import { createRandom } from './game/random';
-import { applyCanvasMetrics, getCanvasMetrics, type CanvasMetrics } from './game/canvas';
+import { applyCanvasMetrics, getCanvasMetrics, getCanvasViewport, type CanvasMetrics } from './game/canvas';
 import { renderGame as renderScene } from './game/renderer';
 import {
   createGameSession,
@@ -147,8 +147,14 @@ export default function App() {
     const ctx = canvas.getContext('2d'); if (!ctx) return;
 
     const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      const metrics = getCanvasMetrics(rect.width || window.innerWidth, rect.height || window.innerHeight, window.devicePixelRatio);
+      const layout = canvas.parentElement?.getBoundingClientRect();
+      const viewport = getCanvasViewport(
+        layout?.width ?? 0,
+        layout?.height ?? 0,
+        window.innerWidth,
+        window.innerHeight,
+      );
+      const metrics = getCanvasMetrics(viewport.width, viewport.height, window.devicePixelRatio);
       applyCanvasMetrics(canvas, ctx, metrics);
       canvasMetricsRef.current = metrics;
     };
@@ -245,7 +251,7 @@ export default function App() {
 
       {/* Wave intro */}
       {waveIntro && (
-        <div className="wave-intro absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+        <div className="wave-intro absolute inset-0 flex items-center justify-center z-30 pointer-events-none" role="status" aria-live="polite">
           <div className="wave-intro__panel text-center animate-pulse">
             <div className="wave-intro__kicker">ПРИГОТОВЬСЯ К БОЮ</div>
             <div className="wave-intro__title">

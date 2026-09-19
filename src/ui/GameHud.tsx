@@ -26,11 +26,11 @@ export function GameHud({ player, character, wave, elapsedSeconds, kills }: Game
           <div className="hud-player-name"><span style={{ color: character.color }}>{character.emoji}</span>{character.name}</div>
           <div className="meter meter--hp" aria-label={`Здоровье ${Math.ceil(player.hp)} из ${player.maxHp}`}>
             <span className="meter__fill" style={{ width: `${hpRatio * 100}%` }} />
-            <span className="meter__label">❤️ {Math.ceil(player.hp)} / {player.maxHp}</span>
+            <span className="meter__label">❤️ HP {Math.ceil(player.hp)} / {player.maxHp}</span>
           </div>
           <div className="meter meter--xp" aria-label={`Опыт ${player.xp} из ${player.xpToNext}`}>
             <span className="meter__fill" style={{ width: `${xpRatio * 100}%` }} />
-            <span className="meter__label">Опыт {player.xp} / {player.xpToNext}</span>
+            <span className="meter__label">✦ ОПЫТ {player.xp} / {player.xpToNext}</span>
           </div>
         </section>
 
