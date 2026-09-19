@@ -177,7 +177,7 @@ export function getRenderSnapshot(session: GameSession): RenderSnapshot;
 The neighboring contracts are intentionally small and are defined in `game/types.ts` so the renderer and UI do not recreate them:
 
 ```ts
-export type GameState = 'menu' | 'character_select' | 'playing' | 'level_up' | 'paused' | 'game_over';
+export type GameState = 'menu' | 'character_select' | 'playing' | 'level_up' | 'paused' | 'game_over' | 'wave_intro';
 
 export interface WaveRuntime {
   number: number;
@@ -204,7 +204,7 @@ export interface Viewport {
 
 export interface CreateGameSessionOptions {
   character: number;
-  seed: number;
+  seed?: number;
 }
 
 export interface GameEvents {
