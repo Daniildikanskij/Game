@@ -14,6 +14,13 @@ import {
   HIGH_SCORE_STORAGE_KEY,
   WAVE_CONFIGS as WAVES,
 } from './game/config';
+import { createRandom } from './game/random';
+import {
+  applyUpgradeChoice,
+  getUpgradeChoices,
+  UPGRADE_DEFINITIONS,
+  type UpgradeChoice,
+} from './game/upgrades';
 import type {
   Chest,
   DamageNumber,
@@ -27,31 +34,12 @@ import type {
   XpOrb,
 } from './game/types';
 
-interface Upgrade { id: string; name: string; description: string; icon: string; apply: (p: Player) => void; }
-
-const ALL_UPGRADES: Upgrade[] = [
-  { id: 'damage_up', name: 'Сила+', description: '+20% к урону', icon: '⚔️', apply: (p: Player) => { p.damage *= 1.2; } },
-  { id: 'speed_up', name: 'Скорость+', description: '+15% к скорости', icon: '💨', apply: (p: Player) => { p.speed *= 1.15; } },
-  { id: 'attack_speed', name: 'Атака+', description: '+20% скорость атаки', icon: '⚡', apply: (p: Player) => { p.attackSpeed *= 1.2; } },
-  { id: 'hp_up', name: 'Здоровье+', description: '+30 макс. HP', icon: '❤️', apply: (p: Player) => { p.maxHp += 30; p.hp += 30; } },
-  { id: 'projectile_count', name: 'Снаряды+', description: '+1 снаряд', icon: '🎯', apply: (p: Player) => { p.projectileCount += 1; } },
-  { id: 'projectile_speed', name: 'Скорость снарядов+', description: '+25% скорость снарядов', icon: '🚀', apply: (p: Player) => { p.projectileSpeed *= 1.25; } },
-  { id: 'pickup_range', name: 'Притяжение+', description: '+30% радиус сбора', icon: '🧲', apply: (p: Player) => { p.pickupRange *= 1.3; } },
-  { id: 'armor', name: 'Броня+', description: '+2 к броне', icon: '🛡️', apply: (p: Player) => { p.armor += 2; } },
-  { id: 'projectile_size', name: 'Размер+', description: '+30% размер снарядов', icon: '💫', apply: (p: Player) => { p.projectileSize *= 1.3; } },
-  { id: 'heal', name: 'Лечение', description: 'Восстановить 50% HP', icon: '💖', apply: (p: Player) => { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.5); } },
-];
-
-function getRandomUpgrades(count: number): Upgrade[] {
-  return [...ALL_UPGRADES].sort(() => Math.random() - 0.5).slice(0, count);
-}
-
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef<GameState>(GAME_STATE.MENU);
   const [uiState, setUiState] = useState<GameState>(GAME_STATE.MENU);
   const [playerData, setPlayerData] = useState({ hp: 100, maxHp: 100, level: 1, xp: 0, xpToNext: 10, damage: 10, speed: 3, attackSpeed: 1 });
-  const [upgrades, setUpgrades] = useState<Upgrade[]>([]);
+  const [upgrades, setUpgrades] = useState<UpgradeChoice[]>([]);
   const [gameTime, setGameTime] = useState(0);
   const [killCount, setKillCount] = useState(0);
   const [highScore, setHighScore] = useState(() => {
@@ -99,6 +87,8 @@ export default function App() {
   const uiUpdateTimerRef = useRef(0);
   const waveIntroTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingLevelUpsRef = useRef(0);
+  const ownedUpgradeLevelsRef = useRef<Record<string, number>>({});
+  const upgradeRandomRef = useRef(createRandom(Date.now()));
 
   const getPlayerSnapshot = (p: Player) => ({
     hp: p.hp,
@@ -110,6 +100,12 @@ export default function App() {
     speed: p.speed,
     attackSpeed: p.attackSpeed,
   });
+
+  const getUpgradeChoicesForPlayer = (count: number): UpgradeChoice[] => {
+    const player = playerRef.current;
+    if (!player) return [];
+    return getUpgradeChoices(UPGRADE_DEFINITIONS, ownedUpgradeLevelsRef.current, player, count, upgradeRandomRef.current);
+  };
 
   const recordHighScore = (score: number) => {
     setHighScore(previous => {
@@ -148,6 +144,8 @@ export default function App() {
     waveEnemiesSpawnedRef.current = 0; waveEnemiesAliveRef.current = 0; waveEnemiesTotalRef.current = 0;
     waveSpawnQueueRef.current = [];
     pendingLevelUpsRef.current = 0;
+    ownedUpgradeLevelsRef.current = {};
+    upgradeRandomRef.current = createRandom(Date.now());
     keysRef.current.clear();
     setPlayerData(getPlayerSnapshot(p));
     setGameTime(0); setKillCount(0); setCurrentWave(1);
@@ -414,7 +412,7 @@ export default function App() {
           case 'damage': p.damage *= 1.15; break;
           case 'speed': p.speed *= 1.1; break;
           case 'upgrade':
-            setUpgrades(getRandomUpgrades(1));
+            setUpgrades(getUpgradeChoicesForPlayer(1));
             gameStateRef.current = GAME_STATE.LEVEL_UP; setUiState(GAME_STATE.LEVEL_UP);
             break;
         }
@@ -441,7 +439,7 @@ export default function App() {
         if (experience.levelsGained > 0) {
           pendingLevelUpsRef.current += experience.levelsGained;
           if (gameStateRef.current === GAME_STATE.PLAYING) {
-            setUpgrades(getRandomUpgrades(3));
+            setUpgrades(getUpgradeChoicesForPlayer(3));
             gameStateRef.current = GAME_STATE.LEVEL_UP; setUiState(GAME_STATE.LEVEL_UP);
           }
         }
@@ -615,15 +613,15 @@ export default function App() {
     ctx.closePath();
   };
 
-  const handleUpgrade = (upgrade: Upgrade) => {
+  const handleUpgrade = (upgrade: UpgradeChoice) => {
     if (playerRef.current) {
-      upgrade.apply(playerRef.current);
+      ownedUpgradeLevelsRef.current = applyUpgradeChoice(playerRef.current, ownedUpgradeLevelsRef.current, upgrade);
       setPlayerData(getPlayerSnapshot(playerRef.current));
     }
     pendingLevelUpsRef.current = Math.max(0, pendingLevelUpsRef.current - 1);
     joystickRef.current = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
     if (pendingLevelUpsRef.current > 0) {
-      setUpgrades(getRandomUpgrades(3));
+      setUpgrades(getUpgradeChoicesForPlayer(3));
       gameStateRef.current = GAME_STATE.LEVEL_UP;
       setUiState(GAME_STATE.LEVEL_UP);
       return;
@@ -782,11 +780,12 @@ export default function App() {
             <p className="modal-description">Выбери усиление, которое изменит этот забег.</p>
             <div className="upgrade-grid flex gap-3 md:gap-5 flex-wrap justify-center items-stretch w-full">
               {upgrades.map((up, i) => (
-                <button key={i} onClick={() => handleUpgrade(up)} className="upgrade-card group relative overflow-hidden">
+                <button key={up.definition.id} onClick={() => handleUpgrade(up)} className="upgrade-card group relative overflow-hidden">
                   <span className="upgrade-card__number">0{i + 1}</span>
-                  <span className="upgrade-card__icon">{up.icon}</span>
-                  <span className="upgrade-card__name">{up.name}</span>
+                  <span className="upgrade-card__icon">{up.definition.icon}</span>
+                  <span className="upgrade-card__name">{up.definition.name} · ур. {up.nextLevel}</span>
                   <span className="upgrade-card__description">{up.description}</span>
+                  <span className="upgrade-card__description">{Object.entries(up.delta).map(([stat, delta]) => `${stat}: ${delta > 0 ? '+' : ''}${delta}`).join(' · ')}</span>
                   <span className="upgrade-card__action">ВЗЯТЬ УЛУЧШЕНИЕ →</span>
                 </button>
               ))}
