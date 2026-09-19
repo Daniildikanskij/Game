@@ -1,3 +1,7 @@
+import type { WaveEnemy } from './game/types';
+
+export type { WaveEnemy } from './game/types';
+
 export type MovementKey = 'up' | 'down' | 'left' | 'right';
 
 export interface KeyboardInput {
@@ -14,12 +18,6 @@ export interface ExperienceProgress {
 export interface ExperienceResult {
   progress: ExperienceProgress;
   levelsGained: number;
-}
-
-export interface WaveEnemy {
-  type: number;
-  count: number;
-  isBoss?: boolean;
 }
 
 const MOVEMENT_BY_CODE: Record<string, MovementKey> = {
