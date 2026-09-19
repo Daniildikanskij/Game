@@ -51,3 +51,12 @@ test('a selected upgrade increments its level and a later level can repeat it', 
 test('an empty viable pool returns no choices instead of a duplicate maxed card', () => {
   assert.deepEqual(getUpgradeChoices(definitions, { damage: 2, armor: 1, heal: 1 }, player, 3, createRandom(4)), []);
 });
+
+test('rounds floating-point preview noise in exact stat deltas', () => {
+  const hpUpgrade = [{ id: 'health', name: 'Здоровье+', icon: '❤️', maxLevel: 1, levels: [
+    { description: '+30 макс. HP', apply: (p: Player) => { p.maxHp += 30; p.hp += 30; } },
+  ] }] as const;
+  const damagedPlayer = { ...player, hp: 6.0000000000000036 };
+  const choice = getUpgradeChoices(hpUpgrade, {}, damagedPlayer, 1, createRandom(5))[0];
+  assert.equal(choice.delta.hp, 30);
+});

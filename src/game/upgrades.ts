@@ -58,7 +58,8 @@ function getPreviewDelta(before: Player, after: Player): Readonly<Record<string,
   const delta: Record<string, number> = {};
   for (const stat of PREVIEW_STATS) {
     const change = after[stat] - before[stat];
-    if (change !== 0) delta[stat] = change;
+    const roundedChange = Math.round((change + Number.EPSILON) * 1_000_000) / 1_000_000;
+    if (roundedChange !== 0) delta[stat] = roundedChange;
   }
   return delta;
 }
