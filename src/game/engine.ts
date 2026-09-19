@@ -1,0 +1,499 @@
+import { addExperience, buildWaveSpawnQueue, spawnProbability } from '../gameLogic.ts';
+import {
+  CHARACTERS,
+  CHEST_TYPES,
+  ENEMY_TYPES,
+  GAME_STATE,
+  MAX_WAVES,
+  WAVE_CONFIGS,
+} from './config.ts';
+import { createRunRandom, normalizeSeed, type RunRandom } from './random.ts';
+import {
+  applyUpgradeChoice,
+  getUpgradeChoices,
+  UPGRADE_DEFINITIONS,
+  type OwnedUpgradeLevels,
+  type UpgradeChoice,
+} from './upgrades.ts';
+import type {
+  Chest,
+  DamageNumber,
+  Enemy,
+  GameState,
+  MovementInput,
+  Particle,
+  Player,
+  Projectile,
+  Viewport,
+  WaveRuntime,
+  XpOrb,
+} from './types';
+
+export type RunResult = 'victory' | 'defeat';
+
+export interface GameEvents {
+  levelUps: number;
+  waveStarted: number | null;
+  gameOver: RunResult | null;
+  stateChanged: GameState | null;
+  scoreChanged: boolean;
+  upgradeChoices: UpgradeChoice[];
+}
+
+export interface RenderSnapshot {
+  player: Player;
+  enemies: readonly Enemy[];
+  projectiles: readonly Projectile[];
+  xpOrbs: readonly XpOrb[];
+  particles: readonly Particle[];
+  damageNumbers: readonly DamageNumber[];
+  chests: readonly Chest[];
+  camera: { x: number; y: number };
+}
+
+export interface GameSession {
+  seed: number;
+  player: Player;
+  enemies: Enemy[];
+  projectiles: Projectile[];
+  xpOrbs: XpOrb[];
+  particles: Particle[];
+  damageNumbers: DamageNumber[];
+  chests: Chest[];
+  camera: { x: number; y: number };
+  wave: WaveRuntime;
+  elapsedSeconds: number;
+  kills: number;
+  state: GameState;
+  result: RunResult | null;
+  random: RunRandom;
+  ownedUpgrades: Record<string, number>;
+  pendingLevelUps: number;
+  upgradeChoices: UpgradeChoice[];
+}
+
+function createEvents(): GameEvents {
+  return {
+    levelUps: 0,
+    waveStarted: null,
+    gameOver: null,
+    stateChanged: null,
+    scoreChanged: false,
+    upgradeChoices: [],
+  };
+}
+
+function generateSeed(): number {
+  const cryptoSource = globalThis.crypto;
+  if (cryptoSource) {
+    const values = new Uint32Array(1);
+    cryptoSource.getRandomValues(values);
+    return normalizeSeed(values[0]);
+  }
+  return normalizeSeed(Date.now());
+}
+
+function getQuerySeed(): number | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const rawSeed = new URLSearchParams(window.location.search).get('seed');
+  if (rawSeed === null) return undefined;
+  const seed = Number(rawSeed);
+  return Number.isInteger(seed) && seed >= 0 && seed <= 0xFFFFFFFF ? seed : undefined;
+}
+
+function createPlayer(character: number): Player {
+  const player: Player = {
+    x: 0,
+    y: 0,
+    hp: 100,
+    maxHp: 100,
+    speed: 3,
+    level: 1,
+    xp: 0,
+    xpToNext: 10,
+    damage: 10,
+    attackSpeed: 1,
+    attackTimer: 0,
+    projectileCount: 1,
+    projectileSpeed: 7,
+    projectileSize: 8,
+    pickupRange: 80,
+    armor: 0,
+    invincibleTimer: 0,
+    character,
+  };
+
+  switch (character) {
+    case 0:
+      player.attackSpeed = 1.3;
+      break;
+    case 1:
+      player.projectileSpeed = 6;
+      player.damage = 12;
+      break;
+    case 2:
+      player.damage = 18;
+      player.attackSpeed = 0.7;
+      break;
+    case 3:
+      player.projectileCount = 3;
+      player.damage = 6;
+      break;
+  }
+
+  return player;
+}
+
+function spawnChest(session: GameSession): void {
+  const chestCount = session.random.world.int(2) + 1;
+  for (let index = 0; index < chestCount; index += 1) {
+    const angle = session.random.world.next() * Math.PI * 2;
+    const distance = 300 + session.random.world.next() * 400;
+    session.chests.push({
+      x: session.player.x + Math.cos(angle) * distance,
+      y: session.player.y + Math.sin(angle) * distance,
+      type: session.random.world.int(CHEST_TYPES.length),
+      collected: false,
+    });
+  }
+}
+
+function startWave(session: GameSession, waveNumber: number): boolean {
+  const wave = WAVE_CONFIGS[waveNumber - 1];
+  if (!wave) return false;
+
+  const queue = buildWaveSpawnQueue(wave.enemies, session.random.world.next);
+  session.wave = {
+    number: waveNumber,
+    remainingSeconds: wave.duration,
+    spawned: 0,
+    alive: 0,
+    total: queue.length,
+    queue,
+  };
+  spawnChest(session);
+  return true;
+}
+
+export function createGameSession(options: { character: number; seed?: number }): GameSession {
+  const seed = normalizeSeed(options.seed ?? getQuerySeed() ?? generateSeed());
+  const session: GameSession = {
+    seed,
+    player: createPlayer(options.character),
+    enemies: [],
+    projectiles: [],
+    xpOrbs: [],
+    particles: [],
+    damageNumbers: [],
+    chests: [],
+    camera: { x: 0, y: 0 },
+    wave: { number: 1, remainingSeconds: 0, spawned: 0, alive: 0, total: 0, queue: [] },
+    elapsedSeconds: 0,
+    kills: 0,
+    state: GAME_STATE.PLAYING,
+    result: null,
+    random: createRunRandom(seed),
+    ownedUpgrades: {},
+    pendingLevelUps: 0,
+    upgradeChoices: [],
+  };
+
+  startWave(session, 1);
+  return session;
+}
+
+function spawnEnemy(session: GameSession, type: number, isBoss = false): void {
+  const angle = session.random.world.next() * Math.PI * 2;
+  const distance = 500 + session.random.world.next() * 200;
+  const definition = ENEMY_TYPES[type];
+  const waveMultiplier = 1 + (session.wave.number - 1) * 0.15;
+  const player = session.player;
+  const hp = definition.hp * waveMultiplier * (isBoss ? 10 : 1);
+
+  session.enemies.push({
+    x: player.x + Math.cos(angle) * distance,
+    y: player.y + Math.sin(angle) * distance,
+    hp,
+    maxHp: hp,
+    speed: definition.speed * (isBoss ? 0.5 : 1),
+    damage: definition.damage * waveMultiplier * (isBoss ? 2 : 1),
+    type,
+    size: definition.size * (isBoss ? 3 : 1),
+    xpValue: definition.xpValue * (isBoss ? 50 : 1),
+    knockbackX: 0,
+    knockbackY: 0,
+    isBoss,
+  });
+}
+
+function addParticles(session: GameSession, x: number, y: number, count: number, color: string, speed: number, size: number, lifetime: number): void {
+  for (let index = 0; index < count; index += 1) {
+    session.particles.push({
+      x,
+      y,
+      vx: (session.random.effects.next() - 0.5) * speed,
+      vy: (session.random.effects.next() - 0.5) * speed,
+      lifetime,
+      maxLifetime: lifetime,
+      color,
+      size: size + session.random.effects.next() * size,
+    });
+  }
+}
+
+function openUpgradeChoices(session: GameSession, count: number, events: GameEvents): void {
+  session.upgradeChoices = getUpgradeChoices(
+    UPGRADE_DEFINITIONS,
+    session.ownedUpgrades,
+    session.player,
+    count,
+    session.random.upgrades,
+  );
+  session.state = GAME_STATE.LEVEL_UP;
+  events.stateChanged = GAME_STATE.LEVEL_UP;
+  events.upgradeChoices = session.upgradeChoices;
+}
+
+function spawnNextWaveEnemy(session: GameSession): void {
+  const enemyConfig = session.wave.queue[session.wave.spawned];
+  if (!enemyConfig) return;
+  spawnEnemy(session, enemyConfig.type, enemyConfig.isBoss ?? false);
+  session.wave.spawned += 1;
+  session.wave.alive += 1;
+}
+
+export function pauseSession(session: GameSession): void {
+  if (session.state === GAME_STATE.PLAYING) session.state = GAME_STATE.PAUSED;
+}
+
+export function resumeSession(session: GameSession): void {
+  if (session.state === GAME_STATE.PAUSED) session.state = GAME_STATE.PLAYING;
+}
+
+export function finishSession(session: GameSession, result: RunResult): void {
+  if (session.state === GAME_STATE.GAME_OVER) return;
+  session.state = GAME_STATE.GAME_OVER;
+  session.result = result;
+}
+
+export function selectUpgrade(session: GameSession, upgradeId: string): GameEvents {
+  const events = createEvents();
+  if (session.state !== GAME_STATE.LEVEL_UP) return events;
+  const choice = session.upgradeChoices.find(item => item.definition.id === upgradeId);
+  if (!choice) return events;
+
+  session.ownedUpgrades = applyUpgradeChoice(session.player, session.ownedUpgrades, choice);
+  session.pendingLevelUps = Math.max(0, session.pendingLevelUps - 1);
+  if (session.pendingLevelUps > 0) {
+    openUpgradeChoices(session, 3, events);
+  } else {
+    session.upgradeChoices = [];
+    session.state = GAME_STATE.PLAYING;
+    events.stateChanged = GAME_STATE.PLAYING;
+  }
+  return events;
+}
+
+export function updateGame(session: GameSession, dt: number, input: MovementInput, viewport: Viewport): GameEvents {
+  const events = createEvents();
+  if (session.state !== GAME_STATE.PLAYING) return events;
+
+  const player = session.player;
+  session.elapsedSeconds += dt;
+
+  let dx = 0;
+  let dy = 0;
+  if (input.up) dy -= 1;
+  if (input.down) dy += 1;
+  if (input.left) dx -= 1;
+  if (input.right) dx += 1;
+  if (input.joystickX !== 0 || input.joystickY !== 0) {
+    dx += input.joystickX;
+    dy += input.joystickY;
+  }
+  if (dx !== 0 || dy !== 0) {
+    const length = Math.sqrt(dx * dx + dy * dy);
+    dx /= length;
+    dy /= length;
+    player.x += dx * player.speed * 60 * dt;
+    player.y += dy * player.speed * 60 * dt;
+  }
+
+  session.camera.x = player.x - viewport.width / 2;
+  session.camera.y = player.y - viewport.height / 2;
+  if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
+
+  player.attackTimer -= dt;
+  if (player.attackTimer <= 0) {
+    player.attackTimer = 1 / player.attackSpeed;
+    const sorted = [...session.enemies].sort((a, b) => ((a.x - player.x) ** 2 + (a.y - player.y) ** 2) - ((b.x - player.x) ** 2 + (b.y - player.y) ** 2));
+    for (let index = 0; index < player.projectileCount; index += 1) {
+      const target = sorted[index % sorted.length];
+      if (!target) break;
+      const angle = Math.atan2(target.y - player.y, target.x - player.x);
+      const spread = player.projectileCount > 1 ? (index - (player.projectileCount - 1) / 2) * 0.15 : 0;
+      session.projectiles.push({
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(angle + spread) * player.projectileSpeed,
+        vy: Math.sin(angle + spread) * player.projectileSpeed,
+        damage: player.damage,
+        size: player.projectileSize,
+        piercing: 1,
+        lifetime: 2,
+        type: player.character,
+      });
+    }
+  }
+
+  session.projectiles = session.projectiles.filter(projectile => {
+    projectile.x += projectile.vx * 60 * dt;
+    projectile.y += projectile.vy * 60 * dt;
+    projectile.lifetime -= dt;
+    if (projectile.lifetime <= 0) return false;
+    for (const enemy of session.enemies) {
+      const distance = Math.sqrt((projectile.x - enemy.x) ** 2 + (projectile.y - enemy.y) ** 2);
+      if (distance < projectile.size + enemy.size) {
+        enemy.hp -= projectile.damage;
+        enemy.knockbackX += projectile.vx * 0.3;
+        enemy.knockbackY += projectile.vy * 0.3;
+        session.damageNumbers.push({ x: enemy.x, y: enemy.y - enemy.size, value: Math.round(projectile.damage), lifetime: 0.8, color: CHARACTERS[player.character].color });
+        addParticles(session, enemy.x, enemy.y, 3, CHARACTERS[player.character].color, 4, 3, 0.5);
+        projectile.piercing -= 1;
+        if (projectile.piercing <= 0) return false;
+      }
+    }
+    return true;
+  });
+
+  session.enemies = session.enemies.filter(enemy => {
+    const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+    enemy.x += Math.cos(angle) * enemy.speed * 60 * dt + enemy.knockbackX;
+    enemy.y += Math.sin(angle) * enemy.speed * 60 * dt + enemy.knockbackY;
+    enemy.knockbackX *= 0.9;
+    enemy.knockbackY *= 0.9;
+    if (enemy.hp <= 0) {
+      session.kills += 1;
+      session.wave.alive = Math.max(0, session.wave.alive - 1);
+      session.xpOrbs.push({ x: enemy.x, y: enemy.y, value: enemy.xpValue, size: 6 + enemy.xpValue });
+      addParticles(session, enemy.x, enemy.y, 8, ENEMY_TYPES[enemy.type].color, 6, 4, 0.6);
+      return false;
+    }
+
+    const distance = Math.sqrt((player.x - enemy.x) ** 2 + (player.y - enemy.y) ** 2);
+    if (distance < enemy.size + 20 && player.invincibleTimer <= 0) {
+      const damage = Math.max(1, enemy.damage - player.armor);
+      player.hp -= damage;
+      player.invincibleTimer = 0.5;
+      session.damageNumbers.push({ x: player.x, y: player.y - 30, value: Math.round(damage), lifetime: 1, color: '#ff0000' });
+      if (player.hp <= 0) {
+        finishSession(session, 'defeat');
+        events.gameOver = 'defeat';
+        events.stateChanged = GAME_STATE.GAME_OVER;
+        events.scoreChanged = true;
+      }
+    }
+    return true;
+  });
+
+  session.chests = session.chests.filter(chest => {
+    if (chest.collected) return false;
+    const distance = Math.sqrt((player.x - chest.x) ** 2 + (player.y - chest.y) ** 2);
+    if (distance >= 40) return true;
+
+    chest.collected = true;
+    const chestType = CHEST_TYPES[chest.type];
+    switch (chestType.reward) {
+      case 'heal':
+        player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.3);
+        break;
+      case 'damage':
+        player.damage *= 1.15;
+        break;
+      case 'speed':
+        player.speed *= 1.1;
+        break;
+      case 'upgrade':
+        session.pendingLevelUps += 1;
+        openUpgradeChoices(session, 1, events);
+        break;
+    }
+    addParticles(session, chest.x, chest.y, 12, chestType.color, 8, 5, 0.8);
+    return false;
+  });
+
+  let experienceChanged = false;
+  session.xpOrbs = session.xpOrbs.filter(orb => {
+    const distance = Math.sqrt((player.x - orb.x) ** 2 + (player.y - orb.y) ** 2);
+    if (distance < player.pickupRange) {
+      const angle = Math.atan2(player.y - orb.y, player.x - orb.x);
+      const pullSpeed = 8 * (1 - distance / player.pickupRange) + 3;
+      orb.x += Math.cos(angle) * pullSpeed * 60 * dt;
+      orb.y += Math.sin(angle) * pullSpeed * 60 * dt;
+    }
+    if (distance >= 25) return true;
+
+    const experience = addExperience({ level: player.level, xp: player.xp, xpToNext: player.xpToNext }, orb.value);
+    player.level = experience.progress.level;
+    player.xp = experience.progress.xp;
+    player.xpToNext = experience.progress.xpToNext;
+    experienceChanged = true;
+    if (experience.levelsGained > 0) {
+      session.pendingLevelUps += experience.levelsGained;
+      events.levelUps += experience.levelsGained;
+      if (session.state === GAME_STATE.PLAYING) openUpgradeChoices(session, 3, events);
+    }
+    return false;
+  });
+
+  session.damageNumbers = session.damageNumbers.filter(number => {
+    number.y -= 40 * dt;
+    number.lifetime -= dt;
+    return number.lifetime > 0;
+  });
+  session.particles = session.particles.filter(particle => {
+    particle.x += particle.vx * 60 * dt;
+    particle.y += particle.vy * 60 * dt;
+    particle.lifetime -= dt;
+    return particle.lifetime > 0;
+  });
+
+  session.wave.remainingSeconds -= dt;
+  if (session.wave.remainingSeconds > 0 && session.wave.spawned < session.wave.total) {
+    const spawnRate = 3 * (1 + session.wave.number * 0.1);
+    if (session.random.world.next() < spawnProbability(spawnRate, dt)) spawnNextWaveEnemy(session);
+  } else if (session.wave.spawned < session.wave.total) {
+    spawnNextWaveEnemy(session);
+  } else if (session.wave.remainingSeconds <= 0 && session.wave.alive <= 0) {
+    if (session.wave.number < MAX_WAVES) {
+      const nextWave = session.wave.number + 1;
+      startWave(session, nextWave);
+      events.waveStarted = nextWave;
+    } else {
+      finishSession(session, 'victory');
+      events.gameOver = 'victory';
+      events.stateChanged = GAME_STATE.GAME_OVER;
+      events.scoreChanged = true;
+    }
+  }
+
+  void experienceChanged;
+  return events;
+}
+
+export function getRenderSnapshot(session: GameSession): RenderSnapshot {
+  return {
+    player: session.player,
+    enemies: session.enemies,
+    projectiles: session.projectiles,
+    xpOrbs: session.xpOrbs,
+    particles: session.particles,
+    damageNumbers: session.damageNumbers,
+    chests: session.chests,
+    camera: { ...session.camera },
+  };
+}
+
+export function getOwnedUpgradeLevels(session: GameSession): OwnedUpgradeLevels {
+  return session.ownedUpgrades;
+}

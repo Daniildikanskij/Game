@@ -7,6 +7,8 @@ export const CHARACTERS = [
   { name: 'Мико', emoji: '⚡', color: '#ffd700', gradient: 'from-yellow-400 to-amber-600', desc: 'Много снарядов, низкий урон', stats: '🌟 MULTI ↑' },
 ] as const;
 
+export type CharacterDefinition = typeof CHARACTERS[number];
+
 export const GAME_STATE = {
   MENU: 'menu',
   CHARACTER_SELECT: 'character_select',

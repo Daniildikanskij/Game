@@ -119,3 +119,39 @@ export interface ChestTypeDefinition {
 }
 
 export type GameState = 'menu' | 'character_select' | 'playing' | 'level_up' | 'game_over' | 'paused' | 'wave_intro';
+
+export interface WaveRuntime {
+  number: number;
+  remainingSeconds: number;
+  spawned: number;
+  alive: number;
+  total: number;
+  queue: WaveEnemy[];
+}
+
+export interface MovementInput {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+  joystickX: number;
+  joystickY: number;
+}
+
+export interface Viewport {
+  width: number;
+  height: number;
+}
+
+export interface PlayerSnapshot {
+  hp: number;
+  maxHp: number;
+  level: number;
+  xp: number;
+  xpToNext: number;
+  damage: number;
+  speed: number;
+  attackSpeed: number;
+  projectileCount: number;
+  armor: number;
+}

@@ -119,6 +119,7 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 0;
+  image-rendering: auto;
 }
 
 .game-hud {
