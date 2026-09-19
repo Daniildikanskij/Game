@@ -19,42 +19,6 @@
 
 Игра собрана на React + Vite + TypeScript и работает через canvas-рендер.
 
-## Быстрый старт
-
-### 1. Установка зависимостей
-
-```powershell
-npm install
-```
-
-### 2. Запуск сервера
-
-```powershell
-npm run dev
-```
-
-После этого проект откроется в dev-сервере Vite, обычно по адресу:
-
-- http://localhost:3000/
-
-### 3. Проверка тестов
-
-```powershell
-npm test
-```
-
-### 4. Проверка типов
-
-```powershell
-npm run typecheck
-```
-
-### 5. Сборка проекта
-
-```powershell
-npm run build
-```
-
 ## Порядок работы над проектом
 
 Рекомендуемый порядок:
