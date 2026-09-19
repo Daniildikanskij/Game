@@ -1,3 +1,5 @@
+export type MagicType = 'arcane' | 'fire' | 'ice' | 'lightning' | 'shadow';
+
 export interface Player {
   x: number;
   y: number;
@@ -17,6 +19,8 @@ export interface Player {
   armor: number;
   invincibleTimer: number;
   character: number;
+  magicType: MagicType;
+  activeMagicTypes?: readonly MagicType[];
 }
 
 export interface Enemy {
@@ -32,6 +36,14 @@ export interface Enemy {
   knockbackX: number;
   knockbackY: number;
   isBoss?: boolean;
+  burnTimer: number;
+  burnDamage: number;
+  slowTimer: number;
+  slowFactor: number;
+  shockTimer: number;
+  shadowTimer: number;
+  shadowDamageBonus: number;
+  shadowStacks: number;
 }
 
 export interface Projectile {
@@ -44,6 +56,8 @@ export interface Projectile {
   piercing: number;
   lifetime: number;
   type: number;
+  magicType?: MagicType;
+  magicTypes?: readonly MagicType[];
 }
 
 export interface XpOrb {
@@ -123,6 +137,8 @@ export type GameState = 'menu' | 'character_select' | 'playing' | 'level_up' | '
 export interface WaveRuntime {
   number: number;
   remainingSeconds: number;
+  spawnInterval: number;
+  spawnAccumulator: number;
   spawned: number;
   alive: number;
   total: number;
@@ -154,4 +170,7 @@ export interface PlayerSnapshot {
   attackSpeed: number;
   projectileCount: number;
   armor: number;
+  magicType: MagicType;
+  activeMagicTypes: readonly MagicType[];
+  ownedUpgrades: Readonly<Record<string, number>>;
 }

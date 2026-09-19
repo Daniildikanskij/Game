@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRandom } from './random.ts';
-import { applyUpgradeChoice, getUpgradeChoices } from './upgrades.ts';
+import { applyUpgradeChoice, getUpgradeChoices, UPGRADE_DEFINITIONS } from './upgrades.ts';
 import type { Player } from './types.ts';
 
 const player: Player = {
@@ -59,4 +59,62 @@ test('rounds floating-point preview noise in exact stat deltas', () => {
   const damagedPlayer = { ...player, hp: 6.0000000000000036 };
   const choice = getUpgradeChoices(hpUpgrade, {}, damagedPlayer, 1, createRandom(5))[0];
   assert.equal(choice.delta.hp, 30);
+});
+
+test('includes fire, ice, and lightning themed upgrades in the roster', () => {
+  const ids = UPGRADE_DEFINITIONS.map(definition => definition.id);
+  assert.ok(ids.includes('fire_technique'));
+  assert.ok(ids.includes('ice_magic'));
+  assert.ok(ids.includes('lightning_attack'));
+
+  const fireChoice = getUpgradeChoices(
+    UPGRADE_DEFINITIONS.filter(definition => definition.id === 'fire_technique'),
+    {},
+    player,
+    1,
+    createRandom(6),
+  )[0];
+
+  assert.equal(fireChoice.definition.name, 'Огненная техника');
+  assert.ok(fireChoice.delta.damage > 0 || fireChoice.delta.projectileCount > 0);
+});
+
+test('elemental upgrades assign magic types that trigger status effects', () => {
+  const firePlayer = { ...player, magicType: 'arcane' as const };
+  const fireChoice = getUpgradeChoices(
+    UPGRADE_DEFINITIONS.filter(definition => definition.id === 'fire_technique'),
+    {},
+    firePlayer,
+    1,
+    createRandom(7),
+  )[0];
+  applyUpgradeChoice(firePlayer, {}, fireChoice);
+  assert.equal(firePlayer.magicType, 'fire');
+  assert.deepEqual(firePlayer.activeMagicTypes, ['fire']);
+
+  const icePlayer = { ...player, magicType: 'arcane' as const };
+  const iceChoice = getUpgradeChoices(
+    UPGRADE_DEFINITIONS.filter(definition => definition.id === 'ice_magic'),
+    {},
+    icePlayer,
+    1,
+    createRandom(8),
+  )[0];
+  applyUpgradeChoice(icePlayer, {}, iceChoice);
+  assert.equal(icePlayer.magicType, 'ice');
+
+  const stackedPlayer = { ...player, magicType: 'arcane' as const, activeMagicTypes: ['fire'] as const };
+  applyUpgradeChoice(stackedPlayer, {}, iceChoice);
+  assert.deepEqual(stackedPlayer.activeMagicTypes, ['fire', 'ice']);
+
+  const lightningPlayer = { ...player, magicType: 'arcane' as const };
+  const lightningChoice = getUpgradeChoices(
+    UPGRADE_DEFINITIONS.filter(definition => definition.id === 'lightning_attack'),
+    {},
+    lightningPlayer,
+    1,
+    createRandom(9),
+  )[0];
+  applyUpgradeChoice(lightningPlayer, {}, lightningChoice);
+  assert.equal(lightningPlayer.magicType, 'lightning');
 });

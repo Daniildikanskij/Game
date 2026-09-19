@@ -20,6 +20,14 @@ const STAT_LABELS: Record<string, string> = {
   armor: 'броня',
 };
 
+const MAGIC_LABELS = {
+  arcane: 'Аркана',
+  fire: 'Огонь',
+  ice: 'Лёд',
+  lightning: 'Молния',
+  shadow: 'Тень',
+} as const;
+
 function formatDelta(delta: Readonly<Record<string, number>>): string {
   return Object.entries(delta)
     .map(([stat, value]) => `${STAT_LABELS[stat] ?? stat}: ${value > 0 ? '+' : ''}${value}`)
@@ -38,17 +46,19 @@ export function LevelUpModal({ level, characterName, choices, onSelect }: LevelU
         <div className="upgrade-grid flex gap-3 md:gap-5 flex-wrap justify-center items-stretch w-full">
           {choices.map((choice, index) => {
             const delta = formatDelta(choice.delta);
+            const elementLabel = choice.definition.magicType ? `Стихия: ${MAGIC_LABELS[choice.definition.magicType]}` : 'Стихия: Аркана';
             return (
               <button
                 key={choice.definition.id}
                 onClick={() => onSelect(choice.definition.id)}
                 className="upgrade-card group relative overflow-hidden"
-                aria-label={`${choice.definition.name}, уровень ${choice.nextLevel}. ${delta}`}
+                aria-label={`${choice.definition.name}, уровень ${choice.nextLevel}. ${delta}. ${elementLabel}`}
               >
                 <span className="upgrade-card__number">0{index + 1}</span>
                 <span className="upgrade-card__icon">{choice.definition.icon}</span>
                 <span className="upgrade-card__name">{choice.definition.name} · ур. {choice.nextLevel}</span>
                 <span className="upgrade-card__description">{choice.description}</span>
+                <span className="upgrade-card__description">{elementLabel}</span>
                 <span className="upgrade-card__description">{delta}</span>
                 <span className="upgrade-card__action">ВЗЯТЬ УЛУЧШЕНИЕ →</span>
               </button>

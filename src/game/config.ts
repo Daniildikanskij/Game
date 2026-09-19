@@ -54,6 +54,13 @@ export const WAVE_CONFIGS: WaveConfig[] = [
 
 export const MAX_WAVES = 30;
 
+export const MAP_BOUNDS = {
+  minX: -1800,
+  maxX: 1800,
+  minY: -1800,
+  maxY: 1800,
+} as const;
+
 export const ENEMY_TYPES = [
   { hp: 20, speed: 1.5, damage: 8, size: 18, xpValue: 3, color: '#8b0000', emoji: '👹' },
   { hp: 40, speed: 1, damage: 12, size: 24, xpValue: 5, color: '#4a0080', emoji: '👻' },

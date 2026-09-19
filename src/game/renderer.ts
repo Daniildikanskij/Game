@@ -1,6 +1,19 @@
-import { CHARACTERS, CHEST_TYPES, ENEMY_TYPES } from './config.ts';
+import { CHARACTERS, CHEST_TYPES, ENEMY_TYPES, MAP_BOUNDS } from './config.ts';
 import type { CanvasMetrics } from './canvas.ts';
 import type { RenderSnapshot } from './engine.ts';
+import type { MagicType } from './types.ts';
+
+const MAGIC_STYLES: Record<MagicType, { primary: string; secondary: string; glow: string; aura: string }> = {
+  arcane: { primary: '#ff7ad9', secondary: '#71f7ff', glow: '#ffd6f8', aura: 'rgba(255, 122, 217, 0.2)' },
+  fire: { primary: '#ff7b1d', secondary: '#ffdb70', glow: '#ffb15a', aura: 'rgba(255, 123, 29, 0.22)' },
+  ice: { primary: '#79d5ff', secondary: '#d8f4ff', glow: '#9ae3ff', aura: 'rgba(121, 213, 255, 0.2)' },
+  lightning: { primary: '#f9f871', secondary: '#a78bfa', glow: '#dffb84', aura: 'rgba(249, 248, 113, 0.22)' },
+  shadow: { primary: '#8b5cf6', secondary: '#c4b5fd', glow: '#d8b4fe', aura: 'rgba(139, 92, 246, 0.2)' },
+};
+
+function getMagicStyle(type: MagicType | undefined) {
+  return MAGIC_STYLES[type ?? 'arcane'];
+}
 
 export interface JoystickRenderState {
   active: boolean;
@@ -37,6 +50,10 @@ export function renderGame(
   for (let y = startY; y < cam.y + height + gridSize; y += gridSize) {
     ctx.beginPath(); ctx.moveTo(0, y - cam.y); ctx.lineTo(width, y - cam.y); ctx.stroke();
   }
+
+  ctx.strokeStyle = 'rgba(110, 231, 200, 0.28)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(MAP_BOUNDS.minX - cam.x, MAP_BOUNDS.minY - cam.y, MAP_BOUNDS.maxX - MAP_BOUNDS.minX, MAP_BOUNDS.maxY - MAP_BOUNDS.minY);
 
   // Chests
   chests.forEach(chest => {
@@ -82,6 +99,14 @@ export function renderGame(
     ctx.restore();
     ctx.font = `${enemy.size}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(definition.emoji, sx, sy);
+    if (enemy.shadowTimer > 0) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sx, sy, enemy.size + 7, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(139, 92, 246, ${0.35 + enemy.shadowStacks * 0.12})`;
+      ctx.lineWidth = 2 + enemy.shadowStacks * 0.5;
+      ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.restore();
+    }
     if (enemy.hp < enemy.maxHp) {
       const barW = enemy.size * 2;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - barW / 2, sy - enemy.size - 10, barW, 4);
@@ -93,23 +118,39 @@ export function renderGame(
   const projectileColors = ['#ff69b4', '#87ceeb', '#ff4500', '#ffd700'];
   projectiles.forEach(projectile => {
     const sx = projectile.x - cam.x, sy = projectile.y - cam.y;
+    const magicStyle = getMagicStyle(projectile.magicType ?? p.magicType);
     ctx.save();
-    ctx.shadowColor = projectileColors[projectile.type]; ctx.shadowBlur = 20;
+    ctx.shadowColor = magicStyle.glow; ctx.shadowBlur = 24;
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, projectile.size * 3);
+    grad.addColorStop(0, magicStyle.primary);
+    grad.addColorStop(0.6, magicStyle.secondary);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(sx, sy, projectile.size * 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.shadowColor = magicStyle.glow; ctx.shadowBlur = 18;
     ctx.beginPath(); ctx.arc(sx, sy, projectile.size, 0, Math.PI * 2);
-    ctx.fillStyle = projectileColors[projectile.type]; ctx.fill();
+    ctx.fillStyle = magicStyle.primary; ctx.fill();
     ctx.restore();
     ctx.beginPath(); ctx.arc(sx - projectile.vx * 0.5, sy - projectile.vy * 0.5, projectile.size * 0.6, 0, Math.PI * 2);
-    ctx.fillStyle = `${projectileColors[projectile.type]}60`; ctx.fill();
+    ctx.fillStyle = `${magicStyle.secondary}cc`; ctx.fill();
   });
 
   // Player
   const playerScreenX = p.x - cam.x, playerScreenY = p.y - cam.y;
+  const playerStyle = getMagicStyle(p.magicType);
   ctx.save();
   const gradient = ctx.createRadialGradient(playerScreenX, playerScreenY, 0, playerScreenX, playerScreenY, 40);
   gradient.addColorStop(0, `${CHARACTERS[p.character].color}30`);
   gradient.addColorStop(1, 'transparent');
   ctx.fillStyle = gradient;
   ctx.beginPath(); ctx.arc(playerScreenX, playerScreenY, 40, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(playerScreenX, playerScreenY, 48, 0, Math.PI * 2);
+  ctx.strokeStyle = playerStyle.aura; ctx.lineWidth = 3; ctx.stroke();
   ctx.restore();
 
   if (p.invincibleTimer > 0 && Math.floor(p.invincibleTimer * 10) % 2 === 0) ctx.globalAlpha = 0.5;

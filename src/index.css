@@ -301,6 +301,93 @@ button:focus-visible {
   font-size: clamp(13px, 1vw, 16px);
 }
 
+.hud-build {
+  position: absolute;
+  top: clamp(190px, 21vh, 250px);
+  left: clamp(14px, 2.4vw, 28px);
+  width: min(520px, 54vw);
+  padding: 10px 12px;
+  border: 1px solid rgba(151, 164, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(8, 11, 27, 0.72);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px);
+}
+
+.hud-build__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.hud-build__count {
+  color: var(--game-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hud-build__slots,
+.hud-build__group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.hud-build__slots {
+  gap: 12px;
+}
+
+.hud-build__group + .hud-build__group {
+  padding-left: 12px;
+  border-left: 1px solid rgba(151, 164, 255, 0.16);
+}
+
+.hud-build__slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 7px;
+  border: 1px solid rgba(151, 164, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(25, 31, 68, 0.9);
+  color: var(--game-text);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.hud-build__slot--magic {
+  border-color: color-mix(in srgb, var(--slot-color) 65%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--slot-color) 24%, transparent);
+}
+
+.hud-build__slot--magic small {
+  display: none;
+}
+
+.hud-build__slot b {
+  position: absolute;
+  right: -4px;
+  bottom: -5px;
+  min-width: 15px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  background: var(--game-pink);
+  color: #16091b;
+  font-size: 10px;
+  text-align: center;
+}
+
+.hud-build__empty {
+  color: var(--game-muted);
+  font-size: 11px;
+}
+
 .pause-fab {
   border: 1px solid rgba(98, 233, 255, 0.36);
   border-radius: 999px;
@@ -804,6 +891,9 @@ kbd {
 }
 
 .modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 26px;
 }
 
@@ -974,6 +1064,32 @@ button:focus-visible,
     font-size: 11px;
   }
 
+  .hud-build {
+    top: 145px;
+    left: 10px;
+    width: min(72vw, 330px);
+    padding: 7px 8px;
+  }
+
+  .hud-build__heading {
+    margin-bottom: 5px;
+  }
+
+  .hud-build__slot {
+    min-width: 27px;
+    height: 27px;
+    padding: 0 5px;
+    font-size: 15px;
+  }
+
+  .hud-build__slots {
+    gap: 7px;
+  }
+
+  .hud-build__group + .hud-build__group {
+    padding-left: 7px;
+  }
+
   .wave-intro {
     top: 138px;
     bottom: 78px;
@@ -1107,5 +1223,271 @@ button:focus-visible,
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==================== Season 2 interface direction ==================== */
+:root {
+  --game-bg: #071014;
+  --game-bg-soft: #102125;
+  --game-panel: rgba(12, 27, 31, 0.9);
+  --game-panel-strong: rgba(16, 34, 38, 0.97);
+  --game-line: rgba(144, 224, 205, 0.2);
+  --game-muted: #8da9a6;
+  --game-text: #f8f5ea;
+  --game-pink: #ff756b;
+  --game-cyan: #6ee7c8;
+  --game-gold: #ffd166;
+  --game-green: #8ee6a9;
+  --game-danger: #ff756b;
+}
+
+html, body, #root,
+.game-shell,
+.screen,
+.modal-panel,
+.hud-card,
+.hud-build,
+.hud-stats,
+.character-card,
+.upgrade-card {
+  font-family: 'Trebuchet MS', 'Arial Narrow', sans-serif;
+}
+
+.game-shell {
+  background:
+    radial-gradient(circle at 15% 18%, rgba(255, 117, 107, 0.12), transparent 30%),
+    radial-gradient(circle at 84% 72%, rgba(110, 231, 200, 0.1), transparent 34%),
+    #071014;
+}
+
+.game-canvas {
+  filter: saturate(0.92) contrast(1.04);
+}
+
+.hud-card,
+.hud-build,
+.hud-stats {
+  border-color: rgba(144, 224, 205, 0.2);
+  background: rgba(8, 20, 24, 0.84);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px) saturate(1.1);
+}
+
+.hud-card {
+  border-radius: 12px;
+}
+
+.hud-card--player {
+  border-left: 3px solid var(--game-pink);
+}
+
+.hud-card--wave {
+  border-right: 3px solid var(--game-cyan);
+}
+
+.hud-player-name,
+.hud-wave-number,
+.screen-heading h2,
+.modal-panel h2,
+.brand-lockup__title {
+  font-family: 'Arial Black', 'Trebuchet MS', sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.hud-magic {
+  color: var(--game-cyan);
+}
+
+.hud-build {
+  border-radius: 12px;
+}
+
+.hud-build__slot {
+  border-radius: 7px;
+  background: rgba(18, 43, 45, 0.88);
+}
+
+.hud-stats {
+  border-radius: 10px;
+}
+
+.hud-stats span {
+  border-right: 1px solid rgba(144, 224, 205, 0.12);
+}
+
+.hud-stats span:last-child {
+  border-right: 0;
+}
+
+.screen {
+  background: linear-gradient(145deg, rgba(5, 16, 20, 0.98), rgba(9, 27, 29, 0.96));
+}
+
+.screen__aurora {
+  background:
+    radial-gradient(circle at 16% 20%, rgba(255, 117, 107, 0.18), transparent 29%),
+    radial-gradient(circle at 83% 16%, rgba(110, 231, 200, 0.16), transparent 27%),
+    radial-gradient(circle at 58% 100%, rgba(255, 209, 102, 0.1), transparent 38%);
+}
+
+.screen__grid {
+  opacity: 0.22;
+  background-image: linear-gradient(rgba(144, 224, 205, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(144, 224, 205, 0.08) 1px, transparent 1px);
+}
+
+.brand-lockup__jp {
+  color: var(--game-cyan);
+  text-shadow: 0 0 28px rgba(110, 231, 200, 0.32);
+}
+
+.brand-lockup__title {
+  color: var(--game-text);
+  text-shadow: 0 8px 0 rgba(255, 117, 107, 0.12), 0 16px 30px rgba(0, 0, 0, 0.4);
+}
+
+.brand-lockup__line {
+  background: linear-gradient(90deg, transparent, var(--game-pink), var(--game-cyan), transparent);
+}
+
+.record-badge {
+  border-color: rgba(255, 209, 102, 0.38);
+  background: rgba(255, 209, 102, 0.1);
+}
+
+.game-button {
+  min-height: 48px;
+  border-radius: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.game-button--primary {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: linear-gradient(110deg, #ff756b, #ed9d55 55%, #ffd166);
+  color: #211411;
+  box-shadow: 0 14px 28px rgba(255, 117, 107, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.game-button--primary:hover,
+.game-button--primary:focus-visible {
+  box-shadow: 0 18px 34px rgba(255, 117, 107, 0.32), 0 0 24px rgba(255, 209, 102, 0.16);
+}
+
+.game-button--ghost {
+  border-color: rgba(144, 224, 205, 0.24);
+  background: rgba(110, 231, 200, 0.05);
+}
+
+.game-button--ghost:hover,
+.game-button--ghost:focus-visible {
+  border-color: var(--game-cyan);
+  background: rgba(110, 231, 200, 0.1);
+  color: var(--game-text);
+}
+
+.character-card {
+  min-height: 248px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(18, 39, 43, 0.92), rgba(7, 19, 23, 0.95));
+}
+
+.character-grid {
+  gap: 14px;
+}
+
+.character-card:hover,
+.character-card:focus-visible {
+  transform: translateY(-7px) rotate(-0.5deg);
+  background: linear-gradient(145deg, rgba(27, 56, 58, 0.98), rgba(10, 28, 30, 0.96));
+  box-shadow: 0 24px 42px rgba(0, 0, 0, 0.3), 0 0 28px rgba(110, 231, 200, 0.12);
+}
+
+.character-card__portrait {
+  border-radius: 12px;
+}
+
+.character-card__select {
+  color: var(--game-cyan);
+}
+
+.modal-backdrop {
+  background: rgba(3, 12, 15, 0.78);
+  backdrop-filter: blur(16px) saturate(0.8);
+}
+
+.modal-panel {
+  border-radius: 16px;
+  border-color: rgba(144, 224, 205, 0.24);
+  background: linear-gradient(145deg, rgba(17, 39, 42, 0.98), rgba(6, 19, 23, 0.98));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.modal-panel--upgrade {
+  border-color: rgba(255, 209, 102, 0.38);
+}
+
+.modal-emblem {
+  border-radius: 12px;
+  background: rgba(255, 209, 102, 0.12);
+}
+
+.upgrade-card {
+  width: 218px;
+  min-height: 224px;
+  border-radius: 12px;
+  border-color: rgba(255, 209, 102, 0.24);
+  background: linear-gradient(160deg, rgba(35, 55, 53, 0.94), rgba(9, 26, 29, 0.96));
+}
+
+.upgrade-grid {
+  gap: 14px;
+}
+
+.upgrade-card:hover,
+.upgrade-card:focus-visible {
+  transform: translateY(-7px) scale(1.015);
+  border-color: var(--game-gold);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.34), 0 0 26px rgba(255, 209, 102, 0.16);
+}
+
+.upgrade-card__icon {
+  border-radius: 12px;
+  background: rgba(255, 209, 102, 0.12);
+}
+
+.result-panel {
+  border-top: 3px solid var(--game-cyan);
+}
+
+.screen--defeat .result-panel {
+  border-top-color: var(--game-danger);
+}
+
+@media (max-width: 720px) {
+  .hud-card,
+  .hud-build,
+  .hud-stats {
+    backdrop-filter: blur(14px);
+  }
+
+  .hud-stats span {
+    border-right: 0;
+  }
+
+  .character-card {
+    min-height: 198px;
+  }
+
+  .character-grid {
+    gap: 10px;
+  }
+
+  .upgrade-card {
+    border-radius: 10px;
+  }
+
+  .upgrade-grid {
+    gap: 10px;
   }
 }

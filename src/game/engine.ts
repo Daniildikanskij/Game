@@ -1,9 +1,10 @@
-import { addExperience, buildWaveSpawnQueue, spawnProbability } from '../gameLogic.ts';
+import { addExperience, buildWaveSpawnQueue, getWaveSpawnInterval } from '../gameLogic.ts';
 import {
   CHARACTERS,
   CHEST_TYPES,
   ENEMY_TYPES,
   GAME_STATE,
+  MAP_BOUNDS,
   MAX_WAVES,
   WAVE_CONFIGS,
 } from './config.ts';
@@ -20,6 +21,7 @@ import type {
   DamageNumber,
   Enemy,
   GameState,
+  MagicType,
   MovementInput,
   Particle,
   Player,
@@ -121,6 +123,8 @@ function createPlayer(character: number): Player {
     armor: 0,
     invincibleTimer: 0,
     character,
+    magicType: 'arcane',
+    activeMagicTypes: ['arcane'],
   };
 
   switch (character) {
@@ -166,6 +170,8 @@ function startWave(session: GameSession, waveNumber: number): boolean {
   session.wave = {
     number: waveNumber,
     remainingSeconds: wave.duration,
+    spawnInterval: getWaveSpawnInterval(queue.length, wave.duration),
+    spawnAccumulator: 0,
     spawned: 0,
     alive: 0,
     total: queue.length,
@@ -187,7 +193,7 @@ export function createGameSession(options: { character: number; seed?: number })
     damageNumbers: [],
     chests: [],
     camera: { x: 0, y: 0 },
-    wave: { number: 1, remainingSeconds: 0, spawned: 0, alive: 0, total: 0, queue: [] },
+      wave: { number: 1, remainingSeconds: 0, spawnInterval: Number.POSITIVE_INFINITY, spawnAccumulator: 0, spawned: 0, alive: 0, total: 0, queue: [] },
     elapsedSeconds: 0,
     kills: 0,
     state: GAME_STATE.PLAYING,
@@ -202,17 +208,57 @@ export function createGameSession(options: { character: number; seed?: number })
   return session;
 }
 
-function spawnEnemy(session: GameSession, type: number, isBoss = false): void {
-  const angle = session.random.world.next() * Math.PI * 2;
-  const distance = 500 + session.random.world.next() * 200;
+export function getEnemySpawnPosition(
+  playerX: number,
+  playerY: number,
+  viewport: Viewport,
+  random: () => number,
+): { x: number; y: number } {
+  const margin = 100;
+  const halfWidth = viewport.width / 2 + margin;
+  const halfHeight = viewport.height / 2 + margin;
+  const distance = Math.max(halfWidth, halfHeight) + 80 + random() * 160;
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const angle = random() * Math.PI * 2;
+    const x = playerX + Math.cos(angle) * distance;
+    const y = playerY + Math.sin(angle) * distance;
+    const outsideViewport = Math.abs(x - playerX) > halfWidth || Math.abs(y - playerY) > halfHeight;
+    if (outsideViewport && x >= MAP_BOUNDS.minX && x <= MAP_BOUNDS.maxX && y >= MAP_BOUNDS.minY && y <= MAP_BOUNDS.maxY) {
+      return { x, y };
+    }
+  }
+
+  const directions = [
+    { x: playerX - halfWidth - 20, y: playerY },
+    { x: playerX + halfWidth + 20, y: playerY },
+    { x: playerX, y: playerY - halfHeight - 20 },
+    { x: playerX, y: playerY + halfHeight + 20 },
+  ];
+  const fallback = directions.find(position => position.x >= MAP_BOUNDS.minX && position.x <= MAP_BOUNDS.maxX && position.y >= MAP_BOUNDS.minY && position.y <= MAP_BOUNDS.maxY);
+  if (fallback) return fallback;
+
+  return {
+    x: Math.max(MAP_BOUNDS.minX, Math.min(MAP_BOUNDS.maxX, playerX)),
+    y: Math.max(MAP_BOUNDS.minY, Math.min(MAP_BOUNDS.maxY, playerY)),
+  };
+}
+
+function clampCameraAxis(playerPosition: number, viewportSize: number, min: number, max: number): number {
+  const maxCamera = Math.max(min, max - viewportSize);
+  return Math.max(min, Math.min(maxCamera, playerPosition - viewportSize / 2));
+}
+
+function spawnEnemy(session: GameSession, type: number, viewport: Viewport, isBoss = false): void {
   const definition = ENEMY_TYPES[type];
   const waveMultiplier = 1 + (session.wave.number - 1) * 0.15;
   const player = session.player;
+  const position = getEnemySpawnPosition(player.x, player.y, viewport, session.random.world.next);
   const hp = definition.hp * waveMultiplier * (isBoss ? 10 : 1);
 
   session.enemies.push({
-    x: player.x + Math.cos(angle) * distance,
-    y: player.y + Math.sin(angle) * distance,
+    x: position.x,
+    y: position.y,
     hp,
     maxHp: hp,
     speed: definition.speed * (isBoss ? 0.5 : 1),
@@ -223,6 +269,14 @@ function spawnEnemy(session: GameSession, type: number, isBoss = false): void {
     knockbackX: 0,
     knockbackY: 0,
     isBoss,
+    burnTimer: 0,
+    burnDamage: 0,
+    slowTimer: 0,
+    slowFactor: 1,
+    shockTimer: 0,
+    shadowTimer: 0,
+    shadowDamageBonus: 1,
+    shadowStacks: 0,
   });
 }
 
@@ -239,6 +293,33 @@ function addParticles(session: GameSession, x: number, y: number, count: number,
       size: size + session.random.effects.next() * size,
     });
   }
+}
+
+export function applyMagicEffect(enemy: Enemy, magicType: MagicType, power: number): void {
+  switch (magicType) {
+    case 'fire':
+      enemy.burnTimer = Math.max(enemy.burnTimer, 2.5);
+      enemy.burnDamage = Math.max(enemy.burnDamage, power * 0.45);
+      break;
+    case 'ice':
+      enemy.slowTimer = Math.max(enemy.slowTimer, 2.1);
+      enemy.slowFactor = Math.min(enemy.slowFactor, 0.65);
+      break;
+    case 'lightning':
+      enemy.shockTimer = Math.max(enemy.shockTimer, 1.1);
+      break;
+    case 'shadow':
+      enemy.shadowTimer = Math.max(enemy.shadowTimer, 3.5);
+      enemy.shadowStacks = Math.min(3, enemy.shadowStacks + 1);
+      enemy.shadowDamageBonus = 1 + enemy.shadowStacks * 0.1;
+      break;
+    default:
+      break;
+  }
+}
+
+export function applyMagicEffects(enemy: Enemy, magicTypes: readonly MagicType[], power: number): void {
+  for (const magicType of magicTypes) applyMagicEffect(enemy, magicType, power);
 }
 
 function openUpgradeChoices(session: GameSession, count: number, events: GameEvents): void {
@@ -264,10 +345,10 @@ function openUpgradeChoices(session: GameSession, count: number, events: GameEve
   events.upgradeChoices = session.upgradeChoices;
 }
 
-function spawnNextWaveEnemy(session: GameSession): void {
+function spawnNextWaveEnemy(session: GameSession, viewport: Viewport): void {
   const enemyConfig = session.wave.queue[session.wave.spawned];
   if (!enemyConfig) return;
-  spawnEnemy(session, enemyConfig.type, enemyConfig.isBoss ?? false);
+  spawnEnemy(session, enemyConfig.type, viewport, enemyConfig.isBoss ?? false);
   session.wave.spawned += 1;
   session.wave.alive += 1;
 }
@@ -327,10 +408,12 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
     dy /= length;
     player.x += dx * player.speed * 60 * dt;
     player.y += dy * player.speed * 60 * dt;
+    player.x = Math.max(MAP_BOUNDS.minX, Math.min(MAP_BOUNDS.maxX, player.x));
+    player.y = Math.max(MAP_BOUNDS.minY, Math.min(MAP_BOUNDS.maxY, player.y));
   }
 
-  session.camera.x = player.x - viewport.width / 2;
-  session.camera.y = player.y - viewport.height / 2;
+  session.camera.x = clampCameraAxis(player.x, viewport.width, MAP_BOUNDS.minX, MAP_BOUNDS.maxX);
+  session.camera.y = clampCameraAxis(player.y, viewport.height, MAP_BOUNDS.minY, MAP_BOUNDS.maxY);
   if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
 
   player.attackTimer -= dt;
@@ -352,6 +435,8 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
         piercing: 1,
         lifetime: 2,
         type: player.character,
+        magicType: player.magicType,
+        magicTypes: player.activeMagicTypes ?? [player.magicType],
       });
     }
   }
@@ -364,11 +449,27 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
     for (const enemy of session.enemies) {
       const distance = Math.sqrt((projectile.x - enemy.x) ** 2 + (projectile.y - enemy.y) ** 2);
       if (distance < projectile.size + enemy.size) {
-        enemy.hp -= projectile.damage;
+        const magicTypes = projectile.magicTypes ?? [projectile.magicType ?? player.magicType];
+        const shadowMarkedBeforeHit = enemy.shadowTimer > 0;
+        const damage = projectile.damage * (enemy.shadowTimer > 0 ? enemy.shadowDamageBonus : 1);
+        enemy.hp -= damage;
         enemy.knockbackX += projectile.vx * 0.3;
         enemy.knockbackY += projectile.vy * 0.3;
-        session.damageNumbers.push({ x: enemy.x, y: enemy.y - enemy.size, value: Math.round(projectile.damage), lifetime: 0.8, color: CHARACTERS[player.character].color });
+        applyMagicEffects(enemy, magicTypes, projectile.damage);
+        if (magicTypes.includes('shadow') && shadowMarkedBeforeHit) {
+          enemy.hp -= projectile.damage * 0.35 * enemy.shadowStacks;
+          addParticles(session, enemy.x, enemy.y, 7, '#8b5cf6', 5, 4, 0.45);
+        }
+        session.damageNumbers.push({ x: enemy.x, y: enemy.y - enemy.size, value: Math.round(damage), lifetime: 0.8, color: CHARACTERS[player.character].color });
         addParticles(session, enemy.x, enemy.y, 3, CHARACTERS[player.character].color, 4, 3, 0.5);
+        if (magicTypes.includes('lightning')) {
+          const nearby = session.enemies.filter(other => other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 120);
+          for (const chainTarget of nearby) {
+            chainTarget.hp -= projectile.damage * 0.55;
+            chainTarget.shockTimer = Math.max(chainTarget.shockTimer, 1.2);
+            addParticles(session, chainTarget.x, chainTarget.y, 5, '#a78bfa', 5, 3, 0.5);
+          }
+        }
         projectile.piercing -= 1;
         if (projectile.piercing <= 0) return false;
       }
@@ -377,11 +478,34 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
   });
 
   session.enemies = session.enemies.filter(enemy => {
+    const slowMultiplier = enemy.slowTimer > 0 ? enemy.slowFactor : 1;
+    const shockMultiplier = enemy.shockTimer > 0 ? 0.82 : 1;
+    const moveSpeed = enemy.speed * slowMultiplier * shockMultiplier;
     const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-    enemy.x += Math.cos(angle) * enemy.speed * 60 * dt + enemy.knockbackX;
-    enemy.y += Math.sin(angle) * enemy.speed * 60 * dt + enemy.knockbackY;
+    enemy.x += Math.cos(angle) * moveSpeed * 60 * dt + enemy.knockbackX;
+    enemy.y += Math.sin(angle) * moveSpeed * 60 * dt + enemy.knockbackY;
+    enemy.x = Math.max(MAP_BOUNDS.minX, Math.min(MAP_BOUNDS.maxX, enemy.x));
+    enemy.y = Math.max(MAP_BOUNDS.minY, Math.min(MAP_BOUNDS.maxY, enemy.y));
     enemy.knockbackX *= 0.9;
     enemy.knockbackY *= 0.9;
+    if (enemy.burnTimer > 0) {
+      enemy.hp -= enemy.burnDamage * dt;
+      enemy.burnTimer -= dt;
+      addParticles(session, enemy.x, enemy.y, 1, '#ff7a18', 2, 2.5, 0.35);
+    }
+    if (enemy.slowTimer > 0) enemy.slowTimer -= dt;
+    if (enemy.shockTimer > 0) {
+      enemy.shockTimer -= dt;
+      enemy.hp -= 0.8 * dt;
+      addParticles(session, enemy.x, enemy.y, 1, '#c4b5fd', 2, 2.5, 0.25);
+    }
+    if (enemy.shadowTimer > 0) {
+      enemy.shadowTimer -= dt;
+      if (enemy.shadowTimer <= 0) {
+        enemy.shadowStacks = 0;
+        enemy.shadowDamageBonus = 1;
+      }
+    }
     if (enemy.hp <= 0) {
       session.kills += 1;
       session.wave.alive = Math.max(0, session.wave.alive - 1);
@@ -467,11 +591,23 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
   });
 
   session.wave.remainingSeconds -= dt;
-  if (session.wave.remainingSeconds > 0 && session.wave.spawned < session.wave.total) {
-    const spawnRate = 3 * (1 + session.wave.number * 0.1);
-    if (session.random.world.next() < spawnProbability(spawnRate, dt)) spawnNextWaveEnemy(session);
-  } else if (session.wave.spawned < session.wave.total) {
-    spawnNextWaveEnemy(session);
+  if (session.wave.spawned < session.wave.total) {
+    const interval = session.wave.spawnInterval;
+    session.wave.spawnAccumulator += dt;
+    const burstLimit = session.wave.remainingSeconds < interval * 3 ? 3 : 2;
+    let spawnedThisFrame = 0;
+    while (session.wave.spawnAccumulator >= interval && spawnedThisFrame < burstLimit && session.wave.spawned < session.wave.total) {
+      session.wave.spawnAccumulator -= interval;
+      spawnNextWaveEnemy(session, viewport);
+      spawnedThisFrame += 1;
+    }
+    if (session.wave.remainingSeconds <= 0) {
+      while (session.wave.spawned < session.wave.total && spawnedThisFrame < 3) {
+        spawnNextWaveEnemy(session, viewport);
+        spawnedThisFrame += 1;
+      }
+      session.wave.spawnAccumulator = 0;
+    }
   } else if (session.wave.remainingSeconds <= 0 && session.wave.alive <= 0) {
     if (session.wave.number < MAX_WAVES) {
       const nextWave = session.wave.number + 1;

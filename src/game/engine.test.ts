@@ -1,17 +1,85 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyMagicEffects,
   createGameSession,
   finishSession,
+  getEnemySpawnPosition,
   pauseSession,
   resumeSession,
   selectUpgrade,
   updateGame,
 } from './engine.ts';
 import { UPGRADE_DEFINITIONS } from './upgrades.ts';
+import type { Enemy } from './types.ts';
 
 const neutralInput = { up: false, down: false, left: false, right: false, joystickX: 0, joystickY: 0 };
 const viewport = { width: 800, height: 600 };
+
+test('enemy spawn positions stay outside the viewport and inside the map', () => {
+  const position = getEnemySpawnPosition(0, 0, viewport, () => 0.5);
+
+  assert.ok(Math.abs(position.x) > viewport.width / 2 + 100 || Math.abs(position.y) > viewport.height / 2 + 100);
+  assert.ok(position.x >= -1800 && position.x <= 1800);
+  assert.ok(position.y >= -1800 && position.y <= 1800);
+});
+
+test('camera stays inside the finite map when player reaches its edge', () => {
+  const session = createGameSession({ character: 0, seed: 5 });
+  session.player.x = 1800;
+  session.player.y = -1800;
+  updateGame(session, 0, neutralInput, viewport);
+
+  assert.equal(session.camera.x, 1000);
+  assert.equal(session.camera.y, -1800);
+});
+
+test('one hit can stack multiple elemental statuses', () => {
+  const enemy: Enemy = {
+    x: 0,
+    y: 0,
+    hp: 100,
+    maxHp: 100,
+    speed: 2,
+    damage: 5,
+    type: 0,
+    size: 20,
+    xpValue: 1,
+    knockbackX: 0,
+    knockbackY: 0,
+    burnTimer: 0,
+    burnDamage: 0,
+    slowTimer: 0,
+    slowFactor: 1,
+    shockTimer: 0,
+    shadowTimer: 0,
+    shadowDamageBonus: 1,
+    shadowStacks: 0,
+  };
+
+  applyMagicEffects(enemy, ['fire', 'ice'], 10);
+
+  assert.equal(enemy.burnTimer, 2.5);
+  assert.equal(enemy.burnDamage, 4.5);
+  assert.equal(enemy.slowTimer, 2.1);
+  assert.equal(enemy.slowFactor, 0.65);
+});
+
+test('shadow magic builds a mark up to three stacks', () => {
+  const enemy: Enemy = {
+    x: 0, y: 0, hp: 100, maxHp: 100, speed: 2, damage: 5, type: 0, size: 20, xpValue: 1,
+    knockbackX: 0, knockbackY: 0, burnTimer: 0, burnDamage: 0, slowTimer: 0, slowFactor: 1,
+    shockTimer: 0, shadowTimer: 0, shadowDamageBonus: 1, shadowStacks: 0,
+  };
+
+  applyMagicEffects(enemy, ['shadow'], 10);
+  applyMagicEffects(enemy, ['shadow'], 10);
+  applyMagicEffects(enemy, ['shadow'], 10);
+
+  assert.equal(enemy.shadowTimer, 3.5);
+  assert.equal(enemy.shadowStacks, 3);
+  assert.equal(enemy.shadowDamageBonus, 1.3);
+});
 
 test('same seed creates the same first wave and chest placement', () => {
   const first = createGameSession({ character: 0, seed: 1234 });

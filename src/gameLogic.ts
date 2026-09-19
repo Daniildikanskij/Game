@@ -74,6 +74,11 @@ export function spawnProbability(ratePerSecond: number, dt: number): number {
   return 1 - Math.exp(-ratePerSecond * dt);
 }
 
+export function getWaveSpawnInterval(totalEnemies: number, durationSeconds: number): number {
+  if (totalEnemies <= 0 || durationSeconds <= 0) return Number.POSITIVE_INFINITY;
+  return Math.max(0.18, (durationSeconds * 0.82) / totalEnemies);
+}
+
 export function buildWaveSpawnQueue(entries: WaveEnemy[], random: () => number): WaveEnemy[] {
   const queue = entries.flatMap(entry => Array.from({ length: Math.max(0, entry.count) }, () => ({ ...entry, count: 1 })));
 

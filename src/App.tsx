@@ -25,14 +25,28 @@ import { CharacterSelect } from './ui/CharacterSelect';
 import { LevelUpModal } from './ui/LevelUpModal';
 import { PauseModal } from './ui/PauseModal';
 import { GameOverModal } from './ui/GameOverModal';
-import type { GameState, MenuParticle, Player } from './game/types';
+import type { GameState, MenuParticle, Player, PlayerSnapshot } from './game/types';
 import type { UpgradeChoice } from './game/upgrades';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef<GameState>(GAME_STATE.MENU);
   const [uiState, setUiState] = useState<GameState>(GAME_STATE.MENU);
-  const [playerData, setPlayerData] = useState({ hp: 100, maxHp: 100, level: 1, xp: 0, xpToNext: 10, damage: 10, speed: 3, attackSpeed: 1, projectileCount: 1, armor: 0 });
+  const [playerData, setPlayerData] = useState<PlayerSnapshot>({
+    hp: 100,
+    maxHp: 100,
+    level: 1,
+    xp: 0,
+    xpToNext: 10,
+    damage: 10,
+    speed: 3,
+    attackSpeed: 1,
+    projectileCount: 1,
+    armor: 0,
+    magicType: 'arcane' as const,
+    activeMagicTypes: ['arcane'] as const,
+    ownedUpgrades: {},
+  });
   const [upgrades, setUpgrades] = useState<UpgradeChoice[]>([]);
   const [gameTime, setGameTime] = useState(0);
   const [killCount, setKillCount] = useState(0);
@@ -67,7 +81,7 @@ export default function App() {
   const uiUpdateTimerRef = useRef(0);
   const waveIntroTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const getPlayerSnapshot = (p: Player) => ({
+  const getPlayerSnapshot = (p: Player, ownedUpgrades: Readonly<Record<string, number>>) => ({
     hp: p.hp,
     maxHp: p.maxHp,
     level: p.level,
@@ -78,6 +92,9 @@ export default function App() {
     attackSpeed: p.attackSpeed,
     projectileCount: p.projectileCount,
     armor: p.armor,
+    magicType: p.magicType,
+    activeMagicTypes: p.activeMagicTypes ?? [p.magicType],
+    ownedUpgrades,
   });
 
   const recordHighScore = (score: number) => {
@@ -105,7 +122,7 @@ export default function App() {
   };
 
   const syncUiWithSession = (session: GameSession) => {
-    setPlayerData(getPlayerSnapshot(session.player));
+    setPlayerData(getPlayerSnapshot(session.player, session.ownedUpgrades));
     setGameTime(Math.floor(session.elapsedSeconds));
     setKillCount(session.kills);
     setCurrentWave(session.wave.number);
@@ -233,7 +250,7 @@ export default function App() {
 
   const activeCharacter = CHARACTERS[sessionRef.current?.player.character ?? 0];
   const showHud = uiState !== GAME_STATE.MENU && uiState !== GAME_STATE.CHARACTER_SELECT;
-  const emptyWave = { number: currentWave, remainingSeconds: 0, spawned: 0, alive: 0, total: 0, queue: [] };
+  const emptyWave = { number: currentWave, remainingSeconds: 0, spawnInterval: Number.POSITIVE_INFINITY, spawnAccumulator: 0, spawned: 0, alive: 0, total: 0, queue: [] };
 
   return (
     <div className="game-shell w-full h-screen overflow-hidden relative select-none">
