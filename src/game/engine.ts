@@ -249,6 +249,16 @@ function openUpgradeChoices(session: GameSession, count: number, events: GameEve
     count,
     session.random.upgrades,
   );
+  if (session.upgradeChoices.length === 0) {
+    session.pendingLevelUps = Math.max(0, session.pendingLevelUps - 1);
+    if (session.pendingLevelUps > 0) {
+      openUpgradeChoices(session, count, events);
+    } else {
+      session.state = GAME_STATE.PLAYING;
+      events.stateChanged = GAME_STATE.PLAYING;
+    }
+    return;
+  }
   session.state = GAME_STATE.LEVEL_UP;
   events.stateChanged = GAME_STATE.LEVEL_UP;
   events.upgradeChoices = session.upgradeChoices;
@@ -422,7 +432,6 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
     return false;
   });
 
-  let experienceChanged = false;
   session.xpOrbs = session.xpOrbs.filter(orb => {
     const distance = Math.sqrt((player.x - orb.x) ** 2 + (player.y - orb.y) ** 2);
     if (distance < player.pickupRange) {
@@ -437,7 +446,6 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
     player.level = experience.progress.level;
     player.xp = experience.progress.xp;
     player.xpToNext = experience.progress.xpToNext;
-    experienceChanged = true;
     if (experience.levelsGained > 0) {
       session.pendingLevelUps += experience.levelsGained;
       events.levelUps += experience.levelsGained;
@@ -477,7 +485,6 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
     }
   }
 
-  void experienceChanged;
   return events;
 }
 
