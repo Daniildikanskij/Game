@@ -162,7 +162,7 @@ export default function App() {
     waveTimerRef.current = wave.duration;
     waveEnemiesSpawnedRef.current = 0;
     waveEnemiesAliveRef.current = 0;
-    waveSpawnQueueRef.current = buildWaveSpawnQueue(wave.enemies);
+    waveSpawnQueueRef.current = buildWaveSpawnQueue(wave.enemies, Math.random);
     waveEnemiesTotalRef.current = waveSpawnQueueRef.current.length;
     
     // Spawn chests

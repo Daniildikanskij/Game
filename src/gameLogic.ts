@@ -74,7 +74,7 @@ export function spawnProbability(ratePerSecond: number, dt: number): number {
   return 1 - Math.exp(-ratePerSecond * dt);
 }
 
-export function buildWaveSpawnQueue(entries: WaveEnemy[], random: () => number = Math.random): WaveEnemy[] {
+export function buildWaveSpawnQueue(entries: WaveEnemy[], random: () => number): WaveEnemy[] {
   const queue = entries.flatMap(entry => Array.from({ length: Math.max(0, entry.count) }, () => ({ ...entry, count: 1 })));
 
   for (let i = queue.length - 1; i > 0; i -= 1) {
