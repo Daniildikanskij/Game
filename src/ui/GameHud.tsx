@@ -1,6 +1,7 @@
 import { MAX_WAVES, type CharacterDefinition } from '../game/config';
 import { getProgressRatio } from '../gameLogic';
 import { UPGRADE_DEFINITIONS } from '../game/upgrades';
+import { ITEM_DEFINITIONS } from '../game/items';
 import type { CSSProperties } from 'react';
 import type { PlayerSnapshot, WaveRuntime } from '../game/types';
 
@@ -44,6 +45,7 @@ export function GameHud({ player, character, wave, elapsedSeconds, kills }: Game
   const magicIcon = MAGIC_ICONS[player.magicType ?? 'arcane'];
   const activeMagicTypes = player.activeMagicTypes.length > 0 ? player.activeMagicTypes : ['arcane' as const];
   const activeUpgrades = UPGRADE_DEFINITIONS.filter(definition => (player.ownedUpgrades[definition.id] ?? 0) > 0);
+  const activeItems = ITEM_DEFINITIONS.filter(definition => (player.ownedItems[definition.id] ?? 0) > 0);
 
   return (
     <div className="game-hud" aria-label="Игровая информация">
@@ -117,6 +119,20 @@ export function GameHud({ player, character, wave, elapsedSeconds, kills }: Game
               <span className="hud-build__empty">Выбери первое улучшение</span>
             )}
           </div>
+          {activeItems.length > 0 && (
+            <div className="hud-build__group" aria-label="Предметы">
+              {activeItems.map(definition => (
+                <span
+                  className="hud-build__slot hud-build__slot--item"
+                  key={definition.id}
+                  title={`${definition.name}: уровень ${player.ownedItems[definition.id]}`}
+                >
+                  <span>{definition.icon}</span>
+                  <b>{player.ownedItems[definition.id]}</b>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>

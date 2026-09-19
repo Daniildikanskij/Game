@@ -4,6 +4,7 @@ import {
   applyMagicEffects,
   createGameSession,
   finishSession,
+  getAimedTargets,
   getEnemySpawnPosition,
   pauseSession,
   resumeSession,
@@ -12,26 +13,37 @@ import {
 } from './engine.ts';
 import { UPGRADE_DEFINITIONS } from './upgrades.ts';
 import type { Enemy } from './types.ts';
+import { MAP_BOUNDS } from './config.ts';
 
 const neutralInput = { up: false, down: false, left: false, right: false, joystickX: 0, joystickY: 0 };
 const viewport = { width: 800, height: 600 };
+
+test('aim selects living nearest targets and does not spread shots away from a lone target', () => {
+  const player = { x: 0, y: 0 };
+  const nearEnemy = { x: 100, y: 0, hp: 10 } as Enemy;
+  const farEnemy = { x: 200, y: 0, hp: 10 } as Enemy;
+  const deadEnemy = { x: 10, y: 0, hp: 0 } as Enemy;
+
+  assert.deepEqual(getAimedTargets(player, [farEnemy, deadEnemy, nearEnemy], 3), [nearEnemy, farEnemy, farEnemy]);
+  assert.deepEqual(getAimedTargets(player, [nearEnemy], 3), [nearEnemy, nearEnemy, nearEnemy]);
+});
 
 test('enemy spawn positions stay outside the viewport and inside the map', () => {
   const position = getEnemySpawnPosition(0, 0, viewport, () => 0.5);
 
   assert.ok(Math.abs(position.x) > viewport.width / 2 + 100 || Math.abs(position.y) > viewport.height / 2 + 100);
-  assert.ok(position.x >= -1800 && position.x <= 1800);
-  assert.ok(position.y >= -1800 && position.y <= 1800);
+  assert.ok(position.x >= MAP_BOUNDS.minX && position.x <= MAP_BOUNDS.maxX);
+  assert.ok(position.y >= MAP_BOUNDS.minY && position.y <= MAP_BOUNDS.maxY);
 });
 
 test('camera stays inside the finite map when player reaches its edge', () => {
   const session = createGameSession({ character: 0, seed: 5 });
-  session.player.x = 1800;
-  session.player.y = -1800;
+  session.player.x = MAP_BOUNDS.maxX;
+  session.player.y = MAP_BOUNDS.minY;
   updateGame(session, 0, neutralInput, viewport);
 
-  assert.equal(session.camera.x, 1000);
-  assert.equal(session.camera.y, -1800);
+  assert.equal(session.camera.x, 1600);
+  assert.equal(session.camera.y, MAP_BOUNDS.minY);
 });
 
 test('one hit can stack multiple elemental statuses', () => {
@@ -86,6 +98,20 @@ test('same seed creates the same first wave and chest placement', () => {
   const second = createGameSession({ character: 0, seed: 1234 });
   assert.deepEqual(first.wave.queue, second.wave.queue);
   assert.deepEqual(first.chests, second.chests);
+});
+
+test('item chest opens a three-card item choice', () => {
+  const session = createGameSession({ character: 0, seed: 23 });
+  const chest = session.chests[0];
+  chest.x = session.player.x;
+  chest.y = session.player.y;
+  chest.type = 4;
+
+  const events = updateGame(session, 0.016, neutralInput, viewport);
+
+  assert.equal(session.state, 'level_up');
+  assert.equal(events.itemChoices.length, 3);
+  assert.equal(session.itemChoices.length, 3);
 });
 
 test('pause prevents simulation time from advancing and resume continues it', () => {

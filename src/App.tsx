@@ -13,6 +13,7 @@ import {
   getRenderSnapshot,
   pauseSession,
   resumeSession,
+  selectItem,
   selectUpgrade,
   updateGame as updateGameSession,
   type GameEvents,
@@ -27,6 +28,7 @@ import { PauseModal } from './ui/PauseModal';
 import { GameOverModal } from './ui/GameOverModal';
 import type { GameState, MenuParticle, Player, PlayerSnapshot } from './game/types';
 import type { UpgradeChoice } from './game/upgrades';
+import type { ItemChoice } from './game/items';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,8 +48,10 @@ export default function App() {
     magicType: 'arcane' as const,
     activeMagicTypes: ['arcane'] as const,
     ownedUpgrades: {},
+    ownedItems: {},
   });
   const [upgrades, setUpgrades] = useState<UpgradeChoice[]>([]);
+  const [items, setItems] = useState<ItemChoice[]>([]);
   const [gameTime, setGameTime] = useState(0);
   const [killCount, setKillCount] = useState(0);
   const [highScore, setHighScore] = useState(() => {
@@ -81,7 +85,7 @@ export default function App() {
   const uiUpdateTimerRef = useRef(0);
   const waveIntroTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const getPlayerSnapshot = (p: Player, ownedUpgrades: Readonly<Record<string, number>>) => ({
+  const getPlayerSnapshot = (p: Player, ownedUpgrades: Readonly<Record<string, number>>, ownedItems: Readonly<Record<string, number>>) => ({
     hp: p.hp,
     maxHp: p.maxHp,
     level: p.level,
@@ -95,6 +99,7 @@ export default function App() {
     magicType: p.magicType,
     activeMagicTypes: p.activeMagicTypes ?? [p.magicType],
     ownedUpgrades,
+    ownedItems,
   });
 
   const recordHighScore = (score: number) => {
@@ -122,7 +127,7 @@ export default function App() {
   };
 
   const syncUiWithSession = (session: GameSession) => {
-    setPlayerData(getPlayerSnapshot(session.player, session.ownedUpgrades));
+    setPlayerData(getPlayerSnapshot(session.player, session.ownedUpgrades, session.ownedItems));
     setGameTime(Math.floor(session.elapsedSeconds));
     setKillCount(session.kills);
     setCurrentWave(session.wave.number);
@@ -132,10 +137,14 @@ export default function App() {
 
   const applyEngineEvents = (session: GameSession, events: GameEvents) => {
     if (events.upgradeChoices.length > 0) setUpgrades(events.upgradeChoices);
+    if (events.itemChoices.length > 0) setItems(events.itemChoices);
     if (events.stateChanged) {
       setUiState(events.stateChanged);
       gameStateRef.current = events.stateChanged;
-      if (events.stateChanged !== GAME_STATE.LEVEL_UP) setUpgrades([]);
+      if (events.stateChanged !== GAME_STATE.LEVEL_UP) {
+        setUpgrades([]);
+        setItems([]);
+      }
     }
     if (events.waveStarted !== null) showWaveIntro(events.waveStarted);
     if (events.gameOver) recordHighScore(Math.floor(session.elapsedSeconds));
@@ -147,6 +156,7 @@ export default function App() {
     sessionRef.current = session;
     inputControllerRef.current?.reset();
     setUpgrades([]);
+    setItems([]);
     setUiState(GAME_STATE.PLAYING);
     gameStateRef.current = GAME_STATE.PLAYING;
     syncUiWithSession(session);
@@ -248,6 +258,15 @@ export default function App() {
     if (session.state === GAME_STATE.PLAYING) lastTimeRef.current = performance.now();
   };
 
+  const handleItem = (item: ItemChoice) => {
+    const session = sessionRef.current;
+    if (!session) return;
+    const events = selectItem(session, item.definition.id);
+    inputControllerRef.current?.reset();
+    applyEngineEvents(session, events);
+    if (session.state === GAME_STATE.PLAYING) lastTimeRef.current = performance.now();
+  };
+
   const activeCharacter = CHARACTERS[sessionRef.current?.player.character ?? 0];
   const showHud = uiState !== GAME_STATE.MENU && uiState !== GAME_STATE.CHARACTER_SELECT;
   const emptyWave = { number: currentWave, remainingSeconds: 0, spawnInterval: Number.POSITIVE_INFINITY, spawnAccumulator: 0, spawned: 0, alive: 0, total: 0, queue: [] };
@@ -322,9 +341,14 @@ export default function App() {
           level={playerData.level}
           characterName={activeCharacter.name}
           choices={upgrades}
+          itemChoices={items}
           onSelect={(id) => {
             const choice = upgrades.find(item => item.definition.id === id);
             if (choice) handleUpgrade(choice);
+          }}
+          onSelectItem={(id) => {
+            const choice = items.find(item => item.definition.id === id);
+            if (choice) handleItem(choice);
           }}
         />
       )}

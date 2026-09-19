@@ -55,11 +55,14 @@ export const WAVE_CONFIGS: WaveConfig[] = [
 export const MAX_WAVES = 30;
 
 export const MAP_BOUNDS = {
-  minX: -1800,
-  maxX: 1800,
-  minY: -1800,
-  maxY: 1800,
+  minX: -2400,
+  maxX: 2400,
+  minY: -2400,
+  maxY: 2400,
 } as const;
+
+export const PROJECTILE_LIFETIME = 2.5;
+export const PLAYER_BASE_SPEED = 3.3;
 
 export const ENEMY_TYPES = [
   { hp: 20, speed: 1.5, damage: 8, size: 18, xpValue: 3, color: '#8b0000', emoji: '👹' },
@@ -73,6 +76,7 @@ export const CHEST_TYPES = [
   { emoji: '🎁', color: '#ff69b4', reward: 'damage' },
   { emoji: '💎', color: '#00ffff', reward: 'speed' },
   { emoji: '👑', color: '#ffd700', reward: 'upgrade' },
+  { emoji: '🧿', color: '#b084ff', reward: 'item' },
 ] as const satisfies readonly ChestTypeDefinition[];
 
 export const HIGH_SCORE_STORAGE_KEY = 'anime-survivors-high-score';

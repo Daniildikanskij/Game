@@ -5,6 +5,7 @@ import {
   buildWaveSpawnQueue,
   getMovementKey,
   getProgressRatio,
+  getWaveEnemyMultiplier,
   getWaveSpawnInterval,
   spawnProbability,
 } from './gameLogic.ts';
@@ -46,9 +47,17 @@ test('uses delta time to make spawn probability independent of frame rate', () =
 });
 
 test('paces a wave across most of its duration with a safe minimum interval', () => {
-  assert.equal(getWaveSpawnInterval(10, 20), 1.64);
-  assert.equal(getWaveSpawnInterval(1000, 20), 0.18);
+  assert.equal(getWaveSpawnInterval(10, 20), 1.48);
+  assert.equal(getWaveSpawnInterval(1000, 20), 0.16);
   assert.equal(getWaveSpawnInterval(0, 20), Number.POSITIVE_INFINITY);
+});
+
+test('scales late waves into large but bounded hordes', () => {
+  assert.equal(getWaveEnemyMultiplier(1), 1);
+  assert.equal(getWaveEnemyMultiplier(10), 3);
+  assert.equal(getWaveEnemyMultiplier(25), 7);
+  assert.equal(getWaveEnemyMultiplier(29), 8);
+  assert.equal(getWaveEnemyMultiplier(99), 8);
 });
 
 test('builds a wave queue with the exact configured enemy composition', () => {

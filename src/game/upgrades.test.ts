@@ -8,7 +8,7 @@ const player: Player = {
   x: 0, y: 0, hp: 50, maxHp: 100, speed: 3, level: 1, xp: 0, xpToNext: 10,
   damage: 10, attackSpeed: 1, attackTimer: 0, projectileCount: 1,
   projectileSpeed: 7, projectileSize: 8, pickupRange: 80, armor: 0,
-  invincibleTimer: 0, character: 0,
+  invincibleTimer: 0, character: 0, magicType: 'arcane',
 };
 
 const definitions = [

@@ -76,7 +76,12 @@ export function spawnProbability(ratePerSecond: number, dt: number): number {
 
 export function getWaveSpawnInterval(totalEnemies: number, durationSeconds: number): number {
   if (totalEnemies <= 0 || durationSeconds <= 0) return Number.POSITIVE_INFINITY;
-  return Math.max(0.18, (durationSeconds * 0.82) / totalEnemies);
+  return Math.max(0.16, (durationSeconds * 0.74) / totalEnemies);
+}
+
+export function getWaveEnemyMultiplier(waveNumber: number): number {
+  if (waveNumber <= 1) return 1;
+  return Math.min(8, Math.floor(1 + waveNumber / 4));
 }
 
 export function buildWaveSpawnQueue(entries: WaveEnemy[], random: () => number): WaveEnemy[] {

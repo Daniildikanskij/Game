@@ -124,7 +124,7 @@ export interface EnemyTypeDefinition {
   emoji: string;
 }
 
-export type ChestReward = 'heal' | 'damage' | 'speed' | 'upgrade';
+export type ChestReward = 'heal' | 'damage' | 'speed' | 'upgrade' | 'item';
 
 export interface ChestTypeDefinition {
   emoji: string;
@@ -173,4 +173,5 @@ export interface PlayerSnapshot {
   magicType: MagicType;
   activeMagicTypes: readonly MagicType[];
   ownedUpgrades: Readonly<Record<string, number>>;
+  ownedItems: Readonly<Record<string, number>>;
 }

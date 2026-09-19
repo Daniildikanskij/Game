@@ -1,10 +1,12 @@
-import { addExperience, buildWaveSpawnQueue, getWaveSpawnInterval } from '../gameLogic.ts';
+import { addExperience, buildWaveSpawnQueue, getWaveEnemyMultiplier, getWaveSpawnInterval } from '../gameLogic.ts';
 import {
   CHARACTERS,
   CHEST_TYPES,
   ENEMY_TYPES,
   GAME_STATE,
   MAP_BOUNDS,
+  PLAYER_BASE_SPEED,
+  PROJECTILE_LIFETIME,
   MAX_WAVES,
   WAVE_CONFIGS,
 } from './config.ts';
@@ -16,6 +18,12 @@ import {
   type OwnedUpgradeLevels,
   type UpgradeChoice,
 } from './upgrades.ts';
+import {
+  applyItemChoice,
+  getItemChoices,
+  ITEM_DEFINITIONS,
+  type ItemChoice,
+} from './items.ts';
 import type {
   Chest,
   DamageNumber,
@@ -40,6 +48,7 @@ export interface GameEvents {
   stateChanged: GameState | null;
   scoreChanged: boolean;
   upgradeChoices: UpgradeChoice[];
+  itemChoices: ItemChoice[];
 }
 
 export interface RenderSnapshot {
@@ -70,8 +79,10 @@ export interface GameSession {
   result: RunResult | null;
   random: RunRandom;
   ownedUpgrades: Record<string, number>;
+  ownedItems: Record<string, number>;
   pendingLevelUps: number;
   upgradeChoices: UpgradeChoice[];
+  itemChoices: ItemChoice[];
 }
 
 function createEvents(): GameEvents {
@@ -82,6 +93,7 @@ function createEvents(): GameEvents {
     stateChanged: null,
     scoreChanged: false,
     upgradeChoices: [],
+    itemChoices: [],
   };
 }
 
@@ -109,7 +121,7 @@ function createPlayer(character: number): Player {
     y: 0,
     hp: 100,
     maxHp: 100,
-    speed: 3,
+    speed: PLAYER_BASE_SPEED,
     level: 1,
     xp: 0,
     xpToNext: 10,
@@ -166,7 +178,12 @@ function startWave(session: GameSession, waveNumber: number): boolean {
   const wave = WAVE_CONFIGS[waveNumber - 1];
   if (!wave) return false;
 
-  const queue = buildWaveSpawnQueue(wave.enemies, session.random.world.next);
+  const enemyMultiplier = getWaveEnemyMultiplier(waveNumber);
+  const scaledEntries = wave.enemies.map(entry => ({
+    ...entry,
+    count: entry.isBoss ? entry.count : entry.count * enemyMultiplier,
+  }));
+  const queue = buildWaveSpawnQueue(scaledEntries, session.random.world.next);
   session.wave = {
     number: waveNumber,
     remainingSeconds: wave.duration,
@@ -200,8 +217,10 @@ export function createGameSession(options: { character: number; seed?: number })
     result: null,
     random: createRunRandom(seed),
     ownedUpgrades: {},
+    ownedItems: {},
     pendingLevelUps: 0,
     upgradeChoices: [],
+    itemChoices: [],
   };
 
   startWave(session, 1);
@@ -247,6 +266,15 @@ export function getEnemySpawnPosition(
 function clampCameraAxis(playerPosition: number, viewportSize: number, min: number, max: number): number {
   const maxCamera = Math.max(min, max - viewportSize);
   return Math.max(min, Math.min(maxCamera, playerPosition - viewportSize / 2));
+}
+
+export function getAimedTargets(player: Pick<Player, 'x' | 'y'>, enemies: readonly Enemy[], projectileCount: number): Enemy[] {
+  const sorted = enemies
+    .filter(enemy => enemy.hp > 0)
+    .sort((first, second) => ((first.x - player.x) ** 2 + (first.y - player.y) ** 2) - ((second.x - player.x) ** 2 + (second.y - player.y) ** 2));
+  if (sorted.length === 0 || projectileCount <= 0) return [];
+
+  return Array.from({ length: projectileCount }, (_, index) => sorted[Math.min(index, sorted.length - 1)]);
 }
 
 function spawnEnemy(session: GameSession, type: number, viewport: Viewport, isBoss = false): void {
@@ -323,6 +351,7 @@ export function applyMagicEffects(enemy: Enemy, magicTypes: readonly MagicType[]
 }
 
 function openUpgradeChoices(session: GameSession, count: number, events: GameEvents): void {
+  session.itemChoices = [];
   session.upgradeChoices = getUpgradeChoices(
     UPGRADE_DEFINITIONS,
     session.ownedUpgrades,
@@ -343,6 +372,19 @@ function openUpgradeChoices(session: GameSession, count: number, events: GameEve
   session.state = GAME_STATE.LEVEL_UP;
   events.stateChanged = GAME_STATE.LEVEL_UP;
   events.upgradeChoices = session.upgradeChoices;
+}
+
+function openItemChoices(session: GameSession, events: GameEvents): void {
+  session.upgradeChoices = [];
+  session.itemChoices = getItemChoices(ITEM_DEFINITIONS, session.ownedItems, 3, session.random.upgrades);
+  if (session.itemChoices.length === 0) {
+    session.state = GAME_STATE.PLAYING;
+    events.stateChanged = GAME_STATE.PLAYING;
+    return;
+  }
+  session.state = GAME_STATE.LEVEL_UP;
+  events.stateChanged = GAME_STATE.LEVEL_UP;
+  events.itemChoices = session.itemChoices;
 }
 
 function spawnNextWaveEnemy(session: GameSession, viewport: Viewport): void {
@@ -385,6 +427,19 @@ export function selectUpgrade(session: GameSession, upgradeId: string): GameEven
   return events;
 }
 
+export function selectItem(session: GameSession, itemId: string): GameEvents {
+  const events = createEvents();
+  if (session.state !== GAME_STATE.LEVEL_UP) return events;
+  const choice = session.itemChoices.find(item => item.definition.id === itemId);
+  if (!choice) return events;
+
+  session.ownedItems = applyItemChoice(session.player, session.ownedItems, choice);
+  session.itemChoices = [];
+  session.state = GAME_STATE.PLAYING;
+  events.stateChanged = GAME_STATE.PLAYING;
+  return events;
+}
+
 export function updateGame(session: GameSession, dt: number, input: MovementInput, viewport: Viewport): GameEvents {
   const events = createEvents();
   if (session.state !== GAME_STATE.PLAYING) return events;
@@ -419,21 +474,20 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
   player.attackTimer -= dt;
   if (player.attackTimer <= 0) {
     player.attackTimer = 1 / player.attackSpeed;
-    const sorted = [...session.enemies].sort((a, b) => ((a.x - player.x) ** 2 + (a.y - player.y) ** 2) - ((b.x - player.x) ** 2 + (b.y - player.y) ** 2));
+    const targets = getAimedTargets(player, session.enemies, player.projectileCount);
     for (let index = 0; index < player.projectileCount; index += 1) {
-      const target = sorted[index % sorted.length];
+      const target = targets[index];
       if (!target) break;
       const angle = Math.atan2(target.y - player.y, target.x - player.x);
-      const spread = player.projectileCount > 1 ? (index - (player.projectileCount - 1) / 2) * 0.15 : 0;
       session.projectiles.push({
         x: player.x,
         y: player.y,
-        vx: Math.cos(angle + spread) * player.projectileSpeed,
-        vy: Math.sin(angle + spread) * player.projectileSpeed,
+        vx: Math.cos(angle) * player.projectileSpeed,
+        vy: Math.sin(angle) * player.projectileSpeed,
         damage: player.damage,
         size: player.projectileSize,
         piercing: 1,
-        lifetime: 2,
+        lifetime: PROJECTILE_LIFETIME,
         type: player.character,
         magicType: player.magicType,
         magicTypes: player.activeMagicTypes ?? [player.magicType],
@@ -550,6 +604,9 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
       case 'upgrade':
         session.pendingLevelUps += 1;
         openUpgradeChoices(session, 1, events);
+        break;
+      case 'item':
+        openItemChoices(session, events);
         break;
     }
     addParticles(session, chest.x, chest.y, 12, chestType.color, 8, 5, 0.8);
