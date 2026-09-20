@@ -169,6 +169,7 @@ export interface PlayerSnapshot {
   speed: number;
   attackSpeed: number;
   projectileCount: number;
+  projectileSize: number;
   armor: number;
   magicType: MagicType;
   activeMagicTypes: readonly MagicType[];

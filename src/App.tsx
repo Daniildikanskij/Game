@@ -44,6 +44,7 @@ export default function App() {
     speed: 3,
     attackSpeed: 1,
     projectileCount: 1,
+    projectileSize: 8,
     armor: 0,
     magicType: 'arcane' as const,
     activeMagicTypes: ['arcane'] as const,
@@ -95,6 +96,7 @@ export default function App() {
     speed: p.speed,
     attackSpeed: p.attackSpeed,
     projectileCount: p.projectileCount,
+    projectileSize: p.projectileSize,
     armor: p.armor,
     magicType: p.magicType,
     activeMagicTypes: p.activeMagicTypes ?? [p.magicType],
@@ -152,7 +154,11 @@ export default function App() {
   };
 
   const initGame = (charIndex: number) => {
-    const session = createGameSession({ character: charIndex });
+    const { width, height } = canvasMetricsRef.current;
+    const session = createGameSession({
+      character: charIndex,
+      viewport: width > 0 && height > 0 ? { width, height } : undefined,
+    });
     sessionRef.current = session;
     inputControllerRef.current?.reset();
     setUpgrades([]);

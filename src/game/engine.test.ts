@@ -5,6 +5,7 @@ import {
   createGameSession,
   finishSession,
   getAimedTargets,
+  getChestSpawnPosition,
   getEnemySpawnPosition,
   pauseSession,
   resumeSession,
@@ -34,6 +35,45 @@ test('enemy spawn positions stay outside the viewport and inside the map', () =>
   assert.ok(Math.abs(position.x) > viewport.width / 2 + 100 || Math.abs(position.y) > viewport.height / 2 + 100);
   assert.ok(position.x >= MAP_BOUNDS.minX && position.x <= MAP_BOUNDS.maxX);
   assert.ok(position.y >= MAP_BOUNDS.minY && position.y <= MAP_BOUNDS.maxY);
+});
+
+test('wave chest positions stay inside the visible world rectangle', () => {
+  const randomValues = [0.1, 0.8];
+  let randomIndex = 0;
+  const position = getChestSpawnPosition(0, 0, { width: 478, height: 898 }, () => {
+    const value = randomValues[randomIndex % randomValues.length];
+    randomIndex += 1;
+    return value;
+  });
+
+  assert.ok(position.x >= -191 && position.x <= 191);
+  assert.ok(position.y >= -401 && position.y <= 401);
+  assert.ok(Math.hypot(position.x, position.y) >= 120);
+});
+
+test('wave chest positions stay visible when the player is at a map edge', () => {
+  const randomValues = [0.1, 0.8];
+  let randomIndex = 0;
+  const position = getChestSpawnPosition(MAP_BOUNDS.maxX, MAP_BOUNDS.maxY, viewport, () => {
+    const value = randomValues[randomIndex % randomValues.length];
+    randomIndex += 1;
+    return value;
+  });
+
+  assert.ok(position.x >= 1648 && position.x <= 2352);
+  assert.ok(position.y >= 1848 && position.y <= 2352);
+  assert.ok(position.x >= MAP_BOUNDS.minX && position.x <= MAP_BOUNDS.maxX);
+  assert.ok(position.y >= MAP_BOUNDS.minY && position.y <= MAP_BOUNDS.maxY);
+});
+
+test('initial wave chests use the actual narrow viewport', () => {
+  const narrowViewport = { width: 478, height: 898 };
+  const session = createGameSession({ character: 0, seed: 77, viewport: narrowViewport });
+
+  for (const chest of session.chests) {
+    assert.ok(chest.x >= session.camera.x + 48 && chest.x <= session.camera.x + narrowViewport.width - 48);
+    assert.ok(chest.y >= session.camera.y + 48 && chest.y <= session.camera.y + narrowViewport.height - 48);
+  }
 });
 
 test('camera stays inside the finite map when player reaches its edge', () => {
@@ -98,6 +138,34 @@ test('same seed creates the same first wave and chest placement', () => {
   const second = createGameSession({ character: 0, seed: 1234 });
   assert.deepEqual(first.wave.queue, second.wave.queue);
   assert.deepEqual(first.chests, second.chests);
+});
+
+test('wave completion attracts old XP orbs and pickups to the player', () => {
+  const session = createGameSession({ character: 0, seed: 123 });
+  const oldOrb = { x: 400, y: 0, value: 1, size: 6 };
+  const oldChest = session.chests[0];
+  oldChest.x = 400;
+  oldChest.y = 0;
+  oldChest.type = 0;
+  session.xpOrbs.push(oldOrb);
+  session.wave.remainingSeconds = 0;
+  session.wave.spawned = session.wave.total;
+  session.wave.alive = 0;
+
+  updateGame(session, 0.016, neutralInput, viewport);
+
+  assert.equal(session.pickupMagnetActive, true);
+  const distanceBeforePull = Math.hypot(oldOrb.x - session.player.x, oldOrb.y - session.player.y);
+  updateGame(session, 0.016, neutralInput, viewport);
+  const distanceAfterPull = Math.hypot(oldOrb.x - session.player.x, oldOrb.y - session.player.y);
+  assert.ok(distanceAfterPull < distanceBeforePull);
+
+  for (let frame = 0; frame < 120 && (session.xpOrbs.includes(oldOrb) || session.chests.includes(oldChest)); frame += 1) {
+    updateGame(session, 0.016, neutralInput, viewport);
+  }
+
+  assert.equal(session.xpOrbs.includes(oldOrb), false);
+  assert.equal(session.chests.includes(oldChest), false);
 });
 
 test('item chest opens a three-card item choice', () => {

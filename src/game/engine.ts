@@ -78,6 +78,7 @@ export interface GameSession {
   state: GameState;
   result: RunResult | null;
   random: RunRandom;
+  pickupMagnetActive: boolean;
   ownedUpgrades: Record<string, number>;
   ownedItems: Record<string, number>;
   pendingLevelUps: number;
@@ -160,21 +161,67 @@ function createPlayer(character: number): Player {
   return player;
 }
 
-function spawnChest(session: GameSession): void {
+const DEFAULT_VIEWPORT: Viewport = { width: 800, height: 600 };
+const CHEST_EDGE_PADDING = 48;
+const CHEST_MIN_DISTANCE = 120;
+
+function getVisibleWorldBounds(playerX: number, playerY: number, viewport: Viewport) {
+  const width = Math.max(1, viewport.width);
+  const height = Math.max(1, viewport.height);
+  const cameraX = clampCameraAxis(playerX, width, MAP_BOUNDS.minX, MAP_BOUNDS.maxX);
+  const cameraY = clampCameraAxis(playerY, height, MAP_BOUNDS.minY, MAP_BOUNDS.maxY);
+  const paddingX = Math.min(CHEST_EDGE_PADDING, width / 2);
+  const paddingY = Math.min(CHEST_EDGE_PADDING, height / 2);
+
+  return {
+    minX: Math.max(MAP_BOUNDS.minX, cameraX + paddingX),
+    maxX: Math.min(MAP_BOUNDS.maxX, cameraX + width - paddingX),
+    minY: Math.max(MAP_BOUNDS.minY, cameraY + paddingY),
+    maxY: Math.min(MAP_BOUNDS.maxY, cameraY + height - paddingY),
+  };
+}
+
+export function getChestSpawnPosition(
+  playerX: number,
+  playerY: number,
+  viewport: Viewport,
+  random: () => number,
+): { x: number; y: number } {
+  const bounds = getVisibleWorldBounds(playerX, playerY, viewport);
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const x = bounds.minX + random() * (bounds.maxX - bounds.minX);
+    const y = bounds.minY + random() * (bounds.maxY - bounds.minY);
+    if (Math.hypot(x - playerX, y - playerY) >= CHEST_MIN_DISTANCE) return { x, y };
+  }
+
+  const corners = [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.minX, y: bounds.maxY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.maxY },
+  ];
+  return corners.reduce((farthest, candidate) => (
+    Math.hypot(candidate.x - playerX, candidate.y - playerY) > Math.hypot(farthest.x - playerX, farthest.y - playerY)
+      ? candidate
+      : farthest
+  ));
+}
+
+function spawnChest(session: GameSession, viewport: Viewport): void {
   const chestCount = session.random.world.int(2) + 1;
   for (let index = 0; index < chestCount; index += 1) {
-    const angle = session.random.world.next() * Math.PI * 2;
-    const distance = 300 + session.random.world.next() * 400;
+    const position = getChestSpawnPosition(session.player.x, session.player.y, viewport, session.random.world.next);
     session.chests.push({
-      x: session.player.x + Math.cos(angle) * distance,
-      y: session.player.y + Math.sin(angle) * distance,
+      x: position.x,
+      y: position.y,
       type: session.random.world.int(CHEST_TYPES.length),
       collected: false,
     });
   }
 }
 
-function startWave(session: GameSession, waveNumber: number): boolean {
+function startWave(session: GameSession, waveNumber: number, viewport: Viewport): boolean {
   const wave = WAVE_CONFIGS[waveNumber - 1];
   if (!wave) return false;
 
@@ -194,12 +241,13 @@ function startWave(session: GameSession, waveNumber: number): boolean {
     total: queue.length,
     queue,
   };
-  spawnChest(session);
+  spawnChest(session, viewport);
   return true;
 }
 
-export function createGameSession(options: { character: number; seed?: number }): GameSession {
+export function createGameSession(options: { character: number; seed?: number; viewport?: Viewport }): GameSession {
   const seed = normalizeSeed(options.seed ?? getQuerySeed() ?? generateSeed());
+  const viewport = options.viewport ?? DEFAULT_VIEWPORT;
   const session: GameSession = {
     seed,
     player: createPlayer(options.character),
@@ -209,13 +257,17 @@ export function createGameSession(options: { character: number; seed?: number })
     particles: [],
     damageNumbers: [],
     chests: [],
-    camera: { x: 0, y: 0 },
-      wave: { number: 1, remainingSeconds: 0, spawnInterval: Number.POSITIVE_INFINITY, spawnAccumulator: 0, spawned: 0, alive: 0, total: 0, queue: [] },
+    camera: {
+      x: clampCameraAxis(0, viewport.width, MAP_BOUNDS.minX, MAP_BOUNDS.maxX),
+      y: clampCameraAxis(0, viewport.height, MAP_BOUNDS.minY, MAP_BOUNDS.maxY),
+    },
+    wave: { number: 1, remainingSeconds: 0, spawnInterval: Number.POSITIVE_INFINITY, spawnAccumulator: 0, spawned: 0, alive: 0, total: 0, queue: [] },
     elapsedSeconds: 0,
     kills: 0,
     state: GAME_STATE.PLAYING,
     result: null,
     random: createRunRandom(seed),
+    pickupMagnetActive: false,
     ownedUpgrades: {},
     ownedItems: {},
     pendingLevelUps: 0,
@@ -223,7 +275,7 @@ export function createGameSession(options: { character: number; seed?: number })
     itemChoices: [],
   };
 
-  startWave(session, 1);
+  startWave(session, 1, viewport);
   return session;
 }
 
@@ -266,6 +318,28 @@ export function getEnemySpawnPosition(
 function clampCameraAxis(playerPosition: number, viewportSize: number, min: number, max: number): number {
   const maxCamera = Math.max(min, max - viewportSize);
   return Math.max(min, Math.min(maxCamera, playerPosition - viewportSize / 2));
+}
+
+function getPickupPullSpeed(distance: number, pickupRange: number, magnetActive: boolean): number {
+  if (magnetActive) return Math.min(36, Math.max(18, distance * 0.2));
+  return 8 * (1 - distance / Math.max(1, pickupRange)) + 3;
+}
+
+function pullPickupToPlayer(
+  pickup: Pick<Chest | XpOrb, 'x' | 'y'>,
+  player: Pick<Player, 'x' | 'y'>,
+  speed: number,
+  dt: number,
+): number {
+  const dx = player.x - pickup.x;
+  const dy = player.y - pickup.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0) return 0;
+
+  const step = Math.min(distance, speed * 60 * dt);
+  pickup.x += (dx / distance) * step;
+  pickup.y += (dy / distance) * step;
+  return distance - step;
 }
 
 export function getAimedTargets(player: Pick<Player, 'x' | 'y'>, enemies: readonly Enemy[], projectileCount: number): Enemy[] {
@@ -586,7 +660,11 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
 
   session.chests = session.chests.filter(chest => {
     if (chest.collected) return false;
-    const distance = Math.sqrt((player.x - chest.x) ** 2 + (player.y - chest.y) ** 2);
+    if (session.state !== GAME_STATE.PLAYING) return true;
+    let distance = Math.hypot(player.x - chest.x, player.y - chest.y);
+    if (session.pickupMagnetActive && distance >= 40) {
+      distance = pullPickupToPlayer(chest, player, getPickupPullSpeed(distance, player.pickupRange, true), dt);
+    }
     if (distance >= 40) return true;
 
     chest.collected = true;
@@ -614,12 +692,14 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
   });
 
   session.xpOrbs = session.xpOrbs.filter(orb => {
-    const distance = Math.sqrt((player.x - orb.x) ** 2 + (player.y - orb.y) ** 2);
-    if (distance < player.pickupRange) {
-      const angle = Math.atan2(player.y - orb.y, player.x - orb.x);
-      const pullSpeed = 8 * (1 - distance / player.pickupRange) + 3;
-      orb.x += Math.cos(angle) * pullSpeed * 60 * dt;
-      orb.y += Math.sin(angle) * pullSpeed * 60 * dt;
+    let distance = Math.hypot(player.x - orb.x, player.y - orb.y);
+    if (distance < player.pickupRange || session.pickupMagnetActive) {
+      distance = pullPickupToPlayer(
+        orb,
+        player,
+        getPickupPullSpeed(distance, player.pickupRange, session.pickupMagnetActive),
+        dt,
+      );
     }
     if (distance >= 25) return true;
 
@@ -634,6 +714,10 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
     }
     return false;
   });
+
+  if (session.pickupMagnetActive && session.xpOrbs.length === 0 && session.chests.length === 0) {
+    session.pickupMagnetActive = false;
+  }
 
   session.damageNumbers = session.damageNumbers.filter(number => {
     number.y -= 40 * dt;
@@ -668,7 +752,8 @@ export function updateGame(session: GameSession, dt: number, input: MovementInpu
   } else if (session.wave.remainingSeconds <= 0 && session.wave.alive <= 0) {
     if (session.wave.number < MAX_WAVES) {
       const nextWave = session.wave.number + 1;
-      startWave(session, nextWave);
+      session.pickupMagnetActive = true;
+      startWave(session, nextWave, viewport);
       events.waveStarted = nextWave;
     } else {
       finishSession(session, 'victory');

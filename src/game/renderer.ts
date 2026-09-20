@@ -23,6 +23,23 @@ export interface JoystickRenderState {
   dy: number;
 }
 
+export interface ProjectilePresentation {
+  coreRadius: number;
+  glowRadius: number;
+  trailRadius: number;
+  gradientRadius: number;
+}
+
+export function getProjectilePresentation(size: number): ProjectilePresentation {
+  const coreRadius = Math.max(1, size);
+  return {
+    coreRadius,
+    glowRadius: coreRadius * 2.6,
+    trailRadius: coreRadius * 0.8,
+    gradientRadius: coreRadius * 3.2,
+  };
+}
+
 export function renderGame(
   ctx: CanvasRenderingContext2D,
   snapshot: RenderSnapshot | null,
@@ -119,21 +136,22 @@ export function renderGame(
   projectiles.forEach(projectile => {
     const sx = projectile.x - cam.x, sy = projectile.y - cam.y;
     const magicStyle = getMagicStyle(projectile.magicType ?? p.magicType);
+    const presentation = getProjectilePresentation(projectile.size);
     ctx.save();
     ctx.shadowColor = magicStyle.glow; ctx.shadowBlur = 24;
-    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, projectile.size * 3);
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, presentation.gradientRadius);
     grad.addColorStop(0, magicStyle.primary);
     grad.addColorStop(0.6, magicStyle.secondary);
     grad.addColorStop(1, 'transparent');
     ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(sx, sy, projectile.size * 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx, sy, presentation.glowRadius, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     ctx.save();
     ctx.shadowColor = magicStyle.glow; ctx.shadowBlur = 18;
-    ctx.beginPath(); ctx.arc(sx, sy, projectile.size, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(sx, sy, presentation.coreRadius, 0, Math.PI * 2);
     ctx.fillStyle = magicStyle.primary; ctx.fill();
     ctx.restore();
-    ctx.beginPath(); ctx.arc(sx - projectile.vx * 0.5, sy - projectile.vy * 0.5, projectile.size * 0.6, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(sx - projectile.vx * 0.5, sy - projectile.vy * 0.5, presentation.trailRadius, 0, Math.PI * 2);
     ctx.fillStyle = `${magicStyle.secondary}cc`; ctx.fill();
   });
 

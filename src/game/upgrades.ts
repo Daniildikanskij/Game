@@ -56,7 +56,7 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
   { id: 'projectile_speed', name: 'Скорость снарядов+', icon: '🚀', maxLevel: 5, levels: createLevels('+25% скорость снарядов', player => { player.projectileSpeed *= 1.25; }, 5) },
   { id: 'pickup_range', name: 'Притяжение+', icon: '🧲', maxLevel: 5, levels: createLevels('+30% радиус сбора', player => { player.pickupRange *= 1.3; }, 5) },
   { id: 'armor', name: 'Броня+', icon: '🛡️', maxLevel: 5, levels: createLevels('+2 к броне', player => { player.armor += 2; }, 5) },
-  { id: 'projectile_size', name: 'Размер+', icon: '💫', maxLevel: 5, levels: createLevels('+30% размер снарядов', player => { player.projectileSize *= 1.3; }, 5) },
+  { id: 'projectile_size', name: 'Размер+', icon: '💫', maxLevel: 5, levels: createLevels('+30% размер снарядов · радиус попадания', player => { player.projectileSize *= 1.3; }, 5) },
   { id: 'heal', name: 'Лечение', icon: '💖', maxLevel: 1, levels: createLevels('Восстановить 50% HP', player => { player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.5); }, 1) },
 ];
 

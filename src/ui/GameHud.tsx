@@ -83,6 +83,7 @@ export function GameHud({ player, character, wave, elapsedSeconds, kills }: Game
         <span><b>✦</b> Скорость <strong>{player.speed.toFixed(1)}</strong></span>
         <span><b>ϟ</b> Атака <strong>{player.attackSpeed.toFixed(1)}/с</strong></span>
         <span><b>◈</b> Снаряды <strong>×{player.projectileCount}</strong></span>
+        <span><b>◉</b> Радиус <strong>{player.projectileSize.toFixed(1)}</strong></span>
         <span><b>⬡</b> Броня <strong>{player.armor}</strong></span>
       </div>
 
